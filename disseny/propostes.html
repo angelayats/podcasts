@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Propostes de caràtula</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Lora:ital,wght@0,500;1,500&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#ecebe8; --surface:#fff; --text:#141414; --muted:#6b6b6b; --border:#d9d7d2; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111; --surface:#1b1b1b; --text:#eee; --muted:#9a9a9a; --border:#2c2c2c; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 "Open Sans", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width:1200px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-family:Oswald, sans-serif; font-weight:600; font-size:32px; margin:0 0 4px; letter-spacing:.5px; }
+  .lead { color:var(--muted); margin:0 0 22px; }
+  .controls { display:flex; flex-wrap:wrap; gap:14px; align-items:end; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:24px; }
+  .controls label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); flex:1; min-width:200px; }
+  .controls input { font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; flex-basis:100%; align-items:center; }
+  .chips span { font-size:13px; color:var(--muted); margin-right:4px; }
+  .chips button { font:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:999px; padding:4px 12px; cursor:pointer; }
+  .chips button:hover { border-color:var(--text); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); gap:20px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:16px; display:flex; flex-direction:column; gap:14px; }
+  .card h2 { margin:0; font-family:Oswald, sans-serif; font-weight:500; font-size:20px; }
+  .card p { margin:0; color:var(--muted); font-size:14px; }
+  .cover svg { width:100%; height:auto; display:block; border-radius:6px; box-shadow:0 6px 24px rgba(0,0,0,.18); }
+  .phone { display:flex; gap:18px; align-items:center; background:linear-gradient(160deg,#3b4a6b,#1d2333); border-radius:14px; padding:16px 18px; }
+  .app { display:flex; flex-direction:column; align-items:center; gap:5px; width:68px; }
+  .app svg { width:62px; height:62px; border-radius:14px; display:block; box-shadow:0 2px 8px rgba(0,0,0,.35); }
+  .app small { color:#fff; font-size:11px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
+  .app.big { width:120px; }
+  .big svg { width:120px; height:120px; border-radius:27px; }
+  .ghost { width:62px; height:62px; border-radius:14px; background:rgba(255,255,255,.18); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Propostes de caràtula i icona</h1>
+  <p class="lead">Tres direccions en la línia de «La cara oculta de la lluna» i «Blanc &amp; Negre», amb el micròfon com a protagonista. Escriu un nom per veure com queda.</p>
+
+  <div class="controls">
+    <label>Nom de l'app <input id="nom" value="EN ANTENA" maxlength="22"></label>
+    <label>Subtítol <input id="sub" value="Calendari de gravacions" maxlength="40"></label>
+    <div class="chips"><span>Idees de nom:</span>
+      <button>EN ANTENA</button><button>ON AIR</button><button>REC</button><button>SALA DE GRAVACIÓ</button><button>GRAVEM</button><button>MICRO OBERT</button><button>EN DIRECTE</button>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</main>
+
+<script>
+const CREAM = '#F4F0E8', INK = '#0E0E0E';
+let n = 0;
+
+/* Micròfon de condensador (coordenades sobre 1024) */
+function mic(fill, lines, id, opts = {}) {
+  const ls = [];
+  for (let y = 252; y <= 492; y += 30) ls.push(`<rect x="412" y="${y}" width="200" height="9" fill="${lines}"/>`);
+  return `
+    <clipPath id="cap${id}"><rect x="412" y="200" width="200" height="340" rx="100"/></clipPath>
+    <rect x="412" y="200" width="200" height="340" rx="100" fill="${fill}"/>
+    ${opts.moon ? `<clipPath id="sh${id}"><ellipse cx="625" cy="370" rx="160" ry="240"/></clipPath>
+                   <g clip-path="url(#cap${id})"><ellipse cx="625" cy="370" rx="160" ry="240" fill="${INK}"/>
+                     <g clip-path="url(#sh${id})">${ls.join('')}</g></g>
+                   <rect x="414" y="202" width="196" height="336" rx="98" fill="none" stroke="${fill}" stroke-width="5"/>`
+      : `<g clip-path="url(#cap${id})">${ls.join('')}</g>`}
+    <path d="M362 392 v64 a150 150 0 0 0 300 0 v-64" fill="none" stroke="${fill}" stroke-width="28" stroke-linecap="round"/>
+    <rect x="498" y="606" width="28" height="112" fill="${fill}"/>
+    <rect x="392" y="714" width="240" height="32" rx="16" fill="${fill}"/>`;
+}
+const fit = (txt, max, base) => Math.min(base, Math.floor(max / Math.max(1, txt.length) * 1.9));
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* A · Blanc i negre partit */
+function A(nom, sub, icon) {
+  const id = ++n;
+  const tf = icon ? 'translate(0 38)' : 'translate(512 96) scale(.9) translate(-512 -200)';
+  const fs = fit(nom, 900, 150);
+  const txt = (c) => icon ? '' : `
+      <text x="512" y="790" text-anchor="middle" font-family="Oswald" font-weight="600" font-size="${fs}" letter-spacing="2" fill="${c}">${esc(nom)}</text>
+      <text x="512" y="872" text-anchor="middle" font-family="Open Sans" font-size="40" fill="${c}">${esc(sub)}</text>`;
+  return `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="L${id}"><rect width="512" height="1024"/></clipPath><clipPath id="R${id}"><rect x="512" width="512" height="1024"/></clipPath></defs>
+    <rect width="512" height="1024" fill="${CREAM}"/><rect x="512" width="512" height="1024" fill="${INK}"/>
+    <g clip-path="url(#L${id})"><g transform="${tf}">${mic(INK, CREAM, id + 'a')}</g>${txt(INK)}</g>
+    <g clip-path="url(#R${id})"><g transform="${tf}">${mic(CREAM, INK, id + 'b')}</g>${txt(CREAM)}</g>
+  </svg>`;
+}
+
+/* B · Micròfon-lluna */
+function B(nom, sub, icon) {
+  const id = ++n;
+  const tf = icon ? 'translate(0 38)' : 'translate(512 96) scale(.9) translate(-512 -200)';
+  const stars = [[180, 170, 5], [260, 300, 3], [820, 210, 4], [760, 120, 3], [870, 420, 3], [150, 470, 3]]
+    .map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r * (icon ? 2 : 1)}" fill="${CREAM}" opacity=".8"/>`).join('');
+  const fs = fit(nom, 900, 130);
+  return `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1024" height="1024" fill="${INK}"/>${stars}
+    <g transform="${tf}">${mic(CREAM, '#2c2c2c', id, { moon: true })}</g>
+    ${icon ? '' : `
+      <text x="512" y="790" text-anchor="middle" font-family="Lora" font-style="italic" font-weight="500" font-size="${fs}" fill="${CREAM}">${esc(nom.charAt(0) + nom.slice(1).toLowerCase())}</text>
+      <text x="512" y="872" text-anchor="middle" font-family="Open Sans" font-size="40" fill="${CREAM}" opacity=".85">${esc(sub)}</text>`}
+  </svg>`;
+}
+
+/* C · Cercle i ones */
+function C(nom, sub, icon) {
+  const id = ++n;
+  const cy = icon ? 512 : 420, r = icon ? 330 : 280;
+  const tf = icon ? 'translate(0 38)' : 'translate(512 228) scale(.72) translate(-512 -200)';
+  const arc = (rr, side) => {
+    const a = 28 * Math.PI / 180, s = side;
+    const x1 = 512 + s * rr * Math.cos(a), y1 = cy - rr * Math.sin(a), y2 = cy + rr * Math.sin(a);
+    return `<path d="M${x1} ${y1} A${rr} ${rr} 0 0 ${s > 0 ? 1 : 0} ${x1} ${y2}" fill="none" stroke="${INK}" stroke-width="${icon ? 30 : 20}" stroke-linecap="round"/>`;
+  };
+  const fs = fit(nom, 900, 140);
+  return `<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+    <defs><clipPath id="O${id}"><circle cx="512" cy="${cy}" r="${r}"/></clipPath></defs>
+    <rect width="1024" height="1024" fill="${CREAM}"/>
+    <circle cx="512" cy="${cy}" r="${r}" fill="${INK}"/>
+    ${arc(r + 50, 1)}${arc(r + 50, -1)}${icon ? '' : arc(r + 105, 1) + arc(r + 105, -1)}
+    <g transform="${tf}">${mic(INK, CREAM, id + 'a')}</g>
+    <g clip-path="url(#O${id})"><g transform="${tf}">${mic(CREAM, INK, id + 'b')}</g></g>
+    ${icon ? '' : `
+      <text x="512" y="842" text-anchor="middle" font-family="Oswald" font-weight="600" font-size="${fs}" letter-spacing="2" fill="${INK}">${esc(nom)}</text>
+      <text x="512" y="920" text-anchor="middle" font-family="Open Sans" font-size="40" fill="${INK}">${esc(sub)}</text>`}
+  </svg>`;
+}
+
+const PROPOSTES = [
+  ['A · Blanc i negre', 'El fons partit en dos com a «Blanc & Negre», amb el micròfon i el nom invertint els colors a cada meitat.', A],
+  ['B · Micròfon-lluna', 'Fons negre amb estrelles i la càpsula del micròfon il·luminada com un quart de lluna, en homenatge a «La cara oculta de la lluna».', B],
+  ['C · Cercle i ones', 'Un cercle negre com un disc o una lluna plena, el micròfon en blanc al centre i ones de so als costats. La més llegible en petit.', C],
+];
+
+function render() {
+  const nom = document.getElementById('nom').value.trim() || 'EN ANTENA';
+  const sub = document.getElementById('sub').value.trim();
+  document.getElementById('grid').innerHTML = PROPOSTES.map(([t, d, f]) => `
+    <section class="card">
+      <h2>${t}</h2><p>${d}</p>
+      <div class="cover">${f(nom, sub, false)}</div>
+      <div class="phone">
+        <div class="app big">${f(nom, sub, true)}<small>${esc(nom)}</small></div>
+        <div class="app">${f(nom, sub, true)}<small>${esc(nom)}</small></div>
+        <div class="app"><div class="ghost"></div><small>&nbsp;</small></div>
+      </div>
+    </section>`).join('');
+}
+document.getElementById('nom').addEventListener('input', render);
+document.getElementById('sub').addEventListener('input', render);
+document.querySelector('.chips').addEventListener('click', (e) => {
+  if (e.target.tagName === 'BUTTON') { document.getElementById('nom').value = e.target.textContent; render(); }
+});
+render();
+document.fonts?.ready.then(render);
+</script>
+</body>
+</html>

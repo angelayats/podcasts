@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PODCAST's · Calendari de gravacions</title>
+  <meta name="description" content="Organitza i calendaritza les gravacions dels programes i podcasts.">
+
+  <!-- App instal·lable (iPhone i ordinador) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0E0E0E">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PODCAST's">
+  <link rel="apple-touch-icon" href="img/icona-180.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Pantalla d'inici (caràtula) -->
+  <div id="splash" aria-hidden="true">
+    <div class="splash-l"></div><div class="splash-r"></div>
+    <div class="splash-in">
+      <img src="img/icona.svg" alt="">
+      <div class="splash-nom"><span class="nom-app">PODCAST's</span></div>
+      <div class="splash-sub">Calendari de gravacions</div>
+    </div>
+  </div>
+
+  <header class="top">
+    <div class="brand">
+      <img src="img/icona.svg" alt="" class="logo">
+      <div><b class="nom-app">PODCAST's</b><small>Calendari de gravacions</small></div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-view="calendari"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Calendari</span></button>
+      <button data-view="agenda"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Agenda</span></button>
+      <button data-view="programes"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span>Programes</span></button>
+      <button data-view="persones"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a7 7 0 0 1 14 0v1M16 4a4 4 0 0 1 0 8M22 21v-1a7 7 0 0 0-4-6.3"/></svg><span>Equip</span></button>
+      <button data-view="config"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Ajustos</span></button>
+    </nav>
+    <button class="btn primary nova" id="btnNova" aria-label="Nova gravació"><span class="plus">+</span><span class="txt">Nova gravació</span></button>
+  </header>
+
+  <main id="main"></main>
+
+  <dialog id="dlg"><form id="dlgForm" novalidate></form></dialog>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
