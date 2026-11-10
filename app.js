@@ -446,7 +446,14 @@ function estadistiques() {
   }).join('')}</tr>`;
   const placeholder = teConvidats() && teArtistes() ? 'Cerca un convidat o artista' : teArtistes() ? 'Cerca un artista o disc' : 'Cerca un convidat';
 
-  return `<div class="stats">
+  return `<div class="panel escolta-panel">
+      <div><b>🎧 Escolta un programa</b><span class="hint">Tria el fitxer a Arxius (carpeta del programa o Al meu iPhone → BookPlayer). No es puja enlloc.</span></div>
+      <div class="grp" style="width:auto">
+        <button class="btn primary" data-action="escolta">▶ Tria i escolta</button>
+        <a class="btn" href="bookplayer://">Obre Book Player</a>
+      </div>
+    </div>
+    <div class="stats">
     <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Estadístiques</h2></div>
       <div class="grp" style="width:auto">
         <select data-filter="progStats" aria-label="Programa" style="width:auto">${progOptions(progStats(), 'Tots els programes')}</select>
@@ -923,15 +930,6 @@ function openGravacio(g, dataPerDefecte) {
       <label>Notícia publicada <input type="url" name="enllac" value="${esc(g.enllac || '')}" placeholder="https://…"></label>
       ${g.enllac ? `<a class="hint" href="${esc(g.enllac)}" target="_blank" rel="noopener">📰 Obre la notícia</a>` : ''}
     </fieldset>
-    ${nou ? '' : `<fieldset><legend>🎧 Escolta</legend>
-      <div class="grp" style="width:auto">
-        <button type="button" class="btn small" data-dlg="escolta">▶ Escolta des d'Arxius</button>
-        <a class="btn small" href="bookplayer://">🎧 Obre Book Player</a>
-        <input type="file" id="fitxerAudio" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav" hidden>
-      </div>
-      <div id="reproductor"></div>
-      <span class="hint">Tria el fitxer de la carpeta del programa o de la de BookPlayer (Arxius → Al meu iPhone → BookPlayer). Només s'escolta: no es puja enlloc.</span>
-    </fieldset>`}
     <label>Estudi <select name="estudi"><option value="">— Cap / fora d'estudi —</option>${estudis.map((s) => `<option ${s === g.estudi ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
     <fieldset><legend>Presenten / participen</legend>
       ${equipPers().length ? `<div class="checks">${equipPers().map((p) => `<label><input type="checkbox" name="presentadors" value="${p.id}" ${(g.presentadors || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>`
@@ -996,7 +994,6 @@ function openGravacio(g, dataPerDefecte) {
       state.gravacions = state.gravacions.filter((x) => x.id !== g.id);
     },
     onExtra(action) {
-      if (action === 'escolta') $('#fitxerAudio').click();
       if (action === 'duplica') {
         closeDialog();
         openGravacio(null, g.data);
@@ -1043,24 +1040,6 @@ function openDialog(html, h) {
   f.scrollTop = 0; dlg.scrollTop = 0;
 }
 function closeDialog() { const d = $('#dlg'); if (d.open) d.close(); }
-
-/* ---------- Escoltar un àudio del iPhone (no es puja enlloc) ---------- */
-let urlAudio = '';
-function aturaAudio() {
-  document.querySelectorAll('#dlg audio').forEach((a) => a.pause());
-  if (urlAudio) { URL.revokeObjectURL(urlAudio); urlAudio = ''; }
-}
-$('#dlg').addEventListener('close', aturaAudio);
-$('#dlgForm').addEventListener('change', (e) => {
-  if (e.target.id !== 'fitxerAudio') return;
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  aturaAudio();
-  urlAudio = URL.createObjectURL(file);
-  $('#reproductor').innerHTML = `<p class="hint" style="margin:8px 0 4px">🎧 ${esc(file.name)}</p>
-    <audio controls autoplay preload="metadata" src="${urlAudio}" style="width:100%"></audio>`;
-});
 
 $('#dlgForm').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1124,6 +1103,7 @@ $('#main').addEventListener('click', (e) => {
     case 'nova-persona': return openPersona(null);
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
+    case 'escolta': return Reproductor.tria();
     case 'stats': {
       const nou = el.dataset.tipus ? { tipus: el.dataset.tipus, prog: el.dataset.prog, mes: Number(el.dataset.mes) || 0 } : null;
       const igual = nou && ui.statsSel && JSON.stringify(nou) === JSON.stringify(ui.statsSel);
@@ -1178,6 +1158,37 @@ $('#main').addEventListener('input', (e) => {
   }
 });
 mobil.addEventListener('change', render);
+
+/* ---------- Reproductor d'àudio (llegeix el fitxer del dispositiu; no es puja enlloc) ---------- */
+const Reproductor = (() => {
+  let url = '';
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'audio/*,.mp3,.m4a,.m4b,.aac,.wav', hidden: true });
+  const barra = Object.assign(document.createElement('div'), { id: 'miniPlayer', hidden: true });
+  document.body.append(inp, barra);
+  function tanca() {
+    barra.querySelector('audio')?.pause();
+    barra.innerHTML = ''; barra.hidden = true;
+    document.body.classList.remove('amb-reproductor');
+    if (url) { URL.revokeObjectURL(url); url = ''; }
+  }
+  inp.addEventListener('change', () => {
+    const file = inp.files[0];
+    inp.value = '';
+    if (!file) return;
+    tanca();
+    url = URL.createObjectURL(file);
+    const nom = file.name.replace(/\.[^.]+$/, '');
+    barra.innerHTML = `<div class="mp-cap"><span>🎧 ${esc(nom)}</span><button type="button" aria-label="Tanca el reproductor">×</button></div>
+      <audio controls autoplay preload="metadata" src="${url}"></audio>`;
+    barra.hidden = false;
+    document.body.classList.add('amb-reproductor');
+    barra.querySelector('button').onclick = tanca;
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: nom, artist: APP.nom, artwork: [{ src: 'img/icona-512.png', sizes: '512x512', type: 'image/png' }] });
+    }
+  });
+  return { tria: () => inp.click(), tanca };
+})();
 
 /* ---------- Arrencada ---------- */
 document.querySelectorAll('.nom-app').forEach((el) => { el.textContent = APP.nom; });
