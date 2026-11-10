@@ -495,6 +495,10 @@ function openPersona(p, tipus) {
     <h3>${nou ? (esConv ? 'Nou convidat' : 'Nova persona') : (esConv ? 'Fitxa del convidat' : 'Edita persona')}</h3>
     <label>Nom <input name="nom" value="${esc(p.nom)}" required></label>
     ${esConv ? `
+      <div class="grp" style="width:auto">
+        <button type="button" class="btn small" data-dlg="contacte">📇 Des dels contactes</button>
+        <input type="file" id="fitxerVcf" accept=".vcf,text/vcard,text/x-vcard" hidden>
+      </div>
       <div class="row">
         <label>Telèfon <input type="tel" name="telefon" value="${esc(p.telefon)}" placeholder="600 000 000"></label>
         <label>Correu <input type="email" name="email" value="${esc(p.email)}" placeholder="nom@exemple.com"></label>
@@ -534,7 +538,68 @@ function openPersona(p, tipus) {
         const g = state.gravacions.find((x) => x.id === b.dataset.id);
         if (g) { closeDialog(); openGravacio(g); }
       }
+      if (a === 'contacte') triaContacte();
     },
+  });
+  $('#fitxerVcf')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const llista = llegeixVcard(await file.text());
+      if (!llista.length) { toast("Aquest fitxer no té cap contacte."); return; }
+      const nomActual = clauCerca($('#dlgForm').elements.nom.value);
+      omplePersona(llista.find((c) => nomActual && clauCerca(c.nom) === nomActual) || llista[0]);
+    } catch (err) { toast("No s'ha pogut llegir el contacte."); }
+  });
+}
+
+/* ---------- Contactes: omplir la fitxa del convidat ---------- */
+const clauCerca = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+
+// Si el navegador deixa triar de l'agenda (Contact Picker), s'obre l'agenda; si no, es tria un fitxer .vcf
+async function triaContacte() {
+  if (navigator.contacts?.select) {
+    try {
+      const [c] = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: false });
+      if (c) omplePersona({ nom: c.name?.[0] || '', telefon: c.tel?.[0] || '', email: c.email?.[0] || '' });
+      return;
+    } catch (err) { /* si falla, es fa servir el fitxer */ }
+  }
+  $('#fitxerVcf').click();
+}
+
+function omplePersona(c) {
+  const f = $('#dlgForm').elements;
+  if (c.nom && !f.nom.value.trim()) f.nom.value = c.nom;
+  if (c.telefon) f.telefon.value = c.telefon;
+  if (c.email) f.email.value = c.email;
+  const omplert = [c.telefon && 'telèfon', c.email && 'correu'].filter(Boolean);
+  toast(omplert.length ? `Afegit: ${omplert.join(' i ')}. Toca «Desa» per guardar-ho.` : 'Aquest contacte no té telèfon ni correu.');
+}
+
+// Llegeix un fitxer vCard (.vcf): nom, primer telèfon (preferit el mòbil) i primer correu de cada contacte
+function llegeixVcard(text) {
+  const linies = text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  const desescapa = (s) => s.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1').trim();
+  const out = [];
+  let c = null;
+  for (const l of linies) {
+    const i = l.indexOf(':');
+    if (i < 0) continue;
+    const cap = l.slice(0, i).toUpperCase(), valor = l.slice(i + 1);
+    const prop = cap.split(';')[0].replace(/^ITEM\d+\./, '');
+    if (prop === 'BEGIN' && /VCARD/i.test(valor)) c = { nom: '', n: '', tels: [], email: '' };
+    else if (!c) continue;
+    else if (prop === 'END') { out.push(c); c = null; }
+    else if (prop === 'FN') c.nom = desescapa(valor);
+    else if (prop === 'N') { const [cognom, nom] = valor.split(';').map(desescapa); c.n = [nom, cognom].filter(Boolean).join(' '); }
+    else if (prop === 'TEL') c.tels.push({ v: desescapa(valor).replace(/^tel:/i, ''), mobil: /CELL|IPHONE|MOBILE/.test(cap), pref: /PREF/.test(cap) });
+    else if (prop === 'EMAIL' && !c.email) c.email = desescapa(valor);
+  }
+  return out.map((x) => {
+    const tel = x.tels.find((t) => t.mobil) || x.tels.find((t) => t.pref) || x.tels[0];
+    return { nom: x.nom || x.n, telefon: tel?.v || '', email: x.email };
   });
 }
 
