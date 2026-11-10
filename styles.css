@@ -290,6 +290,15 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   box-shadow: var(--shadow); z-index: 100; max-width: calc(100vw - 32px); font-weight: 600; font-size: 14px;
 }
 
+.brand small { white-space: nowrap; }
+/* Finestres mitjanes: pestanyes només amb icona */
+@media (min-width: 761px) and (max-width: 1150px) {
+  .tabs button span { display: none; }
+  .tabs button { padding: 8px 12px; }
+  .nova .txt { display: none; }
+  .nova .plus { margin: 0; }
+}
+
 /* =========  Mòbil (iPhone)  ========= */
 @media (max-width: 760px) {
   .top { padding: calc(10px + var(--safe-t)) 16px 10px; }
