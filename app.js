@@ -381,7 +381,7 @@ const filaConvidat = (p) => {
       : h.length ? `Previst: ${esc(titolG(h.filter((g) => !jaGravada(g)).pop() || h[0]))}` : 'Encara no ha vingut'}</span></button>`;
 };
 const filaArtista = (a) => `<button class="fila" data-action="edita" data-id="${a.eps[0].id}">
-  <span class="avatar conv mini">🎸</span><b>${esc(a.nom)}</b><span class="hint">${a.eps.length} ${a.eps.length === 1 ? 'episodi' : 'episodis'}</span>
+  <span class="avatar conv mini">🎸</span><b>${esc(a.nom)}</b>${a.eps.length > 1 ? `<span class="badge repetit">⚠ Surt en ${a.eps.length} episodis</span>` : ''}<span class="hint">${a.eps.length} ${a.eps.length === 1 ? 'episodi' : 'episodis'}</span>
   <span class="det">${a.eps.map((g) => `${esc(titolG(g))} (${estatNom(g.estat)})`).join(' · ')}</span></button>`;
 // Llistat desplegat sota les targetes (segons la xifra tocada i el cercador)
 function llistaStats() {
