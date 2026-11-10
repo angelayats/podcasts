@@ -102,7 +102,7 @@ const emDia = (ds) => visibles().filter((g) => g.emissio === ds && g.estat !== '
 const dataRef = (g) => g.data || g.emissio || '';
 // Ordre: per data; els que encara no tenen data van al final, per número d'episodi
 const clauOrdre = (g) => (dataRef(g) ? dataRef(g) + (g.data ? g.hora : g.horaEmissio || '') : '~' + String(Number(g.numero) || 0).padStart(5, '0'));
-const ordena = (a, b) => clauOrdre(a).localeCompare(clauOrdre(b));
+const ordena = (a, b) => { const x = clauOrdre(a), y = clauOrdre(b); return x < y ? -1 : x > y ? 1 : 0; };
 const horari = (g) => (g.data && g.hora ? `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}` : 'Sense data de gravació');
 const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
 const emissioText = (g) => (g.emissio ? `📻 Emissió: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
