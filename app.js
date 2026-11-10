@@ -546,7 +546,7 @@ function llistaConvidats() {
       <div class="avatar conv">${esc(inicials(p.nom))}</div>
       <div class="in">
         <h3>${esc(p.nom)}${p.potencial ? ' <span class="badge potencial">Potencial</span>' : ''}</h3>
-        <div class="sub">${vingut.length ? `Ha vingut ${vingut.length} ${vingut.length === 1 ? 'vegada' : 'vegades'} · ${esc(titolG(vingut[0]))} (${esc(progNom(vingut[0]))})` : 'Encara no ha vingut'}</div>
+        <div class="sub">${vingut.length ? `Ha vingut ${vingut.length} ${vingut.length === 1 ? 'vegada' : 'vegades'} · ${vingut[0].numero ? `Ep. ${vingut[0].numero}` : esc(vingut[0].titol)} · ${esc(progNom(vingut[0]))}` : 'Encara no ha vingut'}</div>
         ${propera ? `<div class="sub">Propera: <b>${propera.data ? 'gravació ' + dataCurta(propera.data) : (propera.emissio ? 'emissió ' + dataCurta(propera.emissio) : 'sense data')}</b> (${esc(titolG(propera))})</div>` : ''}
         <div class="sub contacte">
           ${p.telefon ? `<a href="tel:${esc(p.telefon.replace(/\s+/g, ''))}">📞 ${esc(p.telefon)}</a>` : ''}
