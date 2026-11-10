@@ -100,7 +100,9 @@ const delDia = (ds) => visibles().filter((g) => g.data === ds).sort((a, b) => to
 const emDia = (ds) => visibles().filter((g) => g.emissio === ds && g.estat !== 'cancellat').sort((a, b) => toMin(a.horaEmissio) - toMin(b.horaEmissio));
 // Data de referència: la de gravació; si encara no en té, la d'emissió
 const dataRef = (g) => g.data || g.emissio || '';
-const ordena = (a, b) => (dataRef(a) + (a.data ? a.hora : a.horaEmissio || '')).localeCompare(dataRef(b) + (b.data ? b.hora : b.horaEmissio || ''));
+// Ordre: per data; els que encara no tenen data van al final, per número d'episodi
+const clauOrdre = (g) => (dataRef(g) ? dataRef(g) + (g.data ? g.hora : g.horaEmissio || '') : '~' + String(Number(g.numero) || 0).padStart(5, '0'));
+const ordena = (a, b) => clauOrdre(a).localeCompare(clauOrdre(b));
 const horari = (g) => (g.data && g.hora ? `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}` : 'Sense data de gravació');
 const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
 const emissioText = (g) => (g.emissio ? `📻 Emissió: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
@@ -258,7 +260,7 @@ function renderTaula() {
   const q = ui.cerca.trim().toLowerCase();
   const rows = visibles()
     .filter((g) => !ui.filtreEstat || g.estat === ui.filtreEstat)
-    .filter((g) => !ui.nomesProperes || (g.data || '') >= avui || (g.emissio || '') >= avui)
+    .filter((g) => !ui.nomesProperes || !dataRef(g) || (g.data || '') >= avui || (g.emissio || '') >= avui)
     .filter((g) => !q || [titolG(g), ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
     .sort(ordena);
   const t = $('#taula');
