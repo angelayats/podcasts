@@ -1,12 +1,12 @@
-// Service worker: permet obrir l'app sense connexió i instal·lar-la.
-// Quan canviïs fitxers de l'app, puja el número de VERSIO perquè els dispositius s'actualitzin.
-const VERSIO = 'podcasts-v4';
+﻿// Service worker: permet obrir l'app sense connexiÃ³ i instalÂ·lar-la.
+// Quan canviÃ¯s fitxers de l'app, puja el nÃºmero de VERSIO perquÃ¨ els dispositius s'actualitzin.
+const VERSIO = 'podcasts-v5';
 const FITXERS = [
   './', 'index.html', 'styles.css', 'app.js', 'sync.js', 'config.js', 'manifest.webmanifest',
   'img/icona.svg', 'img/icona-180.png', 'img/icona-192.png', 'img/icona-512.png', 'img/favicon-32.png',
   'img/la-cara-oculta-de-la-lluna.jpg', 'img/blanc-i-negre.jpg',
 ];
-// Fitxers externs que també es guarden per funcionar sense connexió
+// Fitxers externs que tambÃ© es guarden per funcionar sense connexiÃ³
 const EXTERNS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net'];
 
 self.addEventListener('install', (e) => {
@@ -21,7 +21,7 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Xarxa primer (per tenir sempre l'última versió); si no hi ha connexió, la còpia guardada.
+// Xarxa primer (per tenir sempre l'Ãºltima versiÃ³); si no hi ha connexiÃ³, la cÃ²pia guardada.
 // Les peticions a la base de dades (Supabase) no es toquen mai.
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);

@@ -1,23 +1,42 @@
 'use strict';
-/* Sincronització entre dispositius amb Supabase.
-   Usa de app.js: state, ui, KEY, PROVES, save, render, toast, $ */
+/* Sincronització entre dispositius amb Supabase, sense usuaris ni contrasenyes.
+   Cada dispositiu es vincula una sola vegada amb una clau privada (es guarda al dispositiu).
+   Usa de app.js: state, ui, KEY, PROVES, save, render, toast, esc, $ */
 
 const Sync = (() => {
   const cfg = window.PODCASTS_CONFIG || {};
   const disponible = !!(cfg.supabaseUrl && cfg.supabaseKey && window.supabase);
   const ENTORN = PROVES ? 'proves' : 'definitiva';
   const MKEY = KEY + '-sync';
+  const CKEY = 'podcasts-clau';
   const COLS = ['programes', 'persones', 'gravacions'];
 
-  let sb = null, sessio = null, membre = null, canal = null;
-  let estat = disponible ? 'sense-sessio' : 'off', detall = '';
+  let sb = null, clau = '', valida = null;
+  let estat = disponible ? 'sense-clau' : 'off', detall = '';
   let ocupat = false, repetir = false, temps = null, aplicant = false;
   let meta = llegeix();
+
+  /* ---------- Clau del dispositiu ---------- */
+  function llegeixClau() {
+    // Si s'obre l'enllaç privat (…#clau=XXXX), es guarda la clau i es neteja l'adreça
+    const m = location.hash.match(/clau=([A-Za-z0-9]+)/);
+    if (m) {
+      try { localStorage.setItem(CKEY, m[1]); } catch (e) { /* res */ }
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; }
+  }
+  function client() {
+    sb = clau ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { 'x-clau-podcasts': clau } },
+    }) : null;
+  }
 
   /* ---------- Memòria local de què s'ha sincronitzat ---------- */
   function llegeix() {
     try { const m = JSON.parse(localStorage.getItem(MKEY)); if (m && m.snap) return m; } catch (e) { /* res */ }
-    return { snap: {}, ultima: null, email: null };
+    return { snap: {}, ultima: null };
   }
   function desa() { try { localStorage.setItem(MKEY, JSON.stringify(meta)); } catch (e) { /* res */ } }
 
@@ -83,7 +102,7 @@ const Sync = (() => {
     return state[col].length !== n;
   }
 
-  // Primera connexió d'aquest dispositiu: ajunta programes i persones amb el mateix nom
+  // Primera sincronització d'aquest dispositiu: ajunta programes i persones amb el mateix nom
   function fusionaPrimer(files) {
     const remots = files.filter((f) => !f.esborrat);
     const remap = {};
@@ -138,19 +157,27 @@ const Sync = (() => {
       aplicant = true;
       save();
       aplicant = false;
-      if (!document.querySelector('#dlg')?.open || ui.view !== 'agenda') render();
+      render();
     }
   }
 
   /* ---------- Cicle de sincronització ---------- */
+  async function comprovaClau() {
+    const { data, error } = await sb.rpc('te_clau');
+    if (error) throw error;
+    return data === true;
+  }
+
   async function sincronitza() {
-    if (!sb || !sessio || membre !== true) return;
+    if (!sb) return;
     if (ocupat) { repetir = true; return; }
     ocupat = true;
     posaEstat('sync');
     try {
-      if (meta.email && meta.email !== sessio.user.email) meta = { snap: {}, ultima: null, email: null };
-      meta.email = sessio.user.email;
+      if (valida !== true) {
+        valida = await comprovaClau();
+        if (!valida) { posaEstat('clau-dolenta'); ocupat = false; return; }
+      }
       if (!meta.ultima) { await baixa(); await puja(); await baixa(); }
       else { await puja(); await baixa(); }
       posaEstat('ok');
@@ -166,49 +193,38 @@ const Sync = (() => {
     temps = setTimeout(sincronitza, ms);
   }
 
-  async function comprovaMembre() {
-    const { data, error } = await sb.from('membres').select('email').limit(1);
-    if (error) { membre = null; posaEstat(navigator.onLine ? 'error' : 'offline', error.message); return; }
-    membre = data.length > 0;
-    if (!membre) { posaEstat('nomembre'); return; }
-    obreCanal();
+  function vincula(nova) {
+    clau = nova.trim();
+    valida = null;
+    try { localStorage.setItem(CKEY, clau); } catch (e) { /* res */ }
+    client();
     programa(0);
   }
-  function obreCanal() {
-    if (canal) return;
-    canal = sb.channel('registres-' + ENTORN)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'registres', filter: `entorn=eq.${ENTORN}` }, () => programa(400))
-      .subscribe();
+  function desvincula() {
+    clau = ''; valida = null; sb = null;
+    try { localStorage.removeItem(CKEY); } catch (e) { /* res */ }
+    posaEstat('sense-clau');
   }
-  function tancaCanal() { if (canal) { sb.removeChannel(canal); canal = null; } }
 
   /* ---------- Estat visible ---------- */
   const TEXTOS = {
-    'sense-sessio': 'Entra per sincronitzar', sync: 'Sincronitzant…', ok: 'Sincronitzat',
-    offline: 'Sense connexió', error: 'Error de sincronització', nomembre: 'Sense accés',
+    'sense-clau': 'Vincula aquest dispositiu', sync: 'Sincronitzant…', ok: 'Sincronitzat',
+    offline: 'Sense connexió', error: 'Error de sincronització', 'clau-dolenta': 'Clau incorrecta',
   };
   function posaEstat(e, d = '') {
     estat = e; detall = d;
     const b = $('#syncBtn');
-    if (!b) return;
-    b.hidden = e === 'off';
-    b.dataset.estat = e;
-    b.querySelector('span').textContent = TEXTOS[e] || '';
-    b.title = d || TEXTOS[e] || '';
-    if (ui.view === 'config' && !document.querySelector('#formSync input:focus')) {
+    if (b) {
+      b.hidden = e === 'off';
+      b.dataset.estat = e;
+      b.querySelector('span').textContent = TEXTOS[e] || '';
+      b.title = d || TEXTOS[e] || '';
+    }
+    if (ui.view === 'config' && !document.querySelector('#formClau input:focus')) {
       const s = $('#seccioSync');
       if (s) { s.outerHTML = html(); bind(); }
     }
   }
-
-  const traduccio = (m = '') => {
-    if (/invalid login/i.test(m)) return 'Correu o contrasenya incorrectes.';
-    if (/not confirmed/i.test(m)) return 'Encara has de confirmar el correu: mira la safata d\'entrada.';
-    if (/already registered/i.test(m)) return 'Aquest correu ja té compte. Fes servir «Entra».';
-    if (/at least 6/i.test(m) || /password should/i.test(m)) return 'La contrasenya ha de tenir com a mínim 6 caràcters.';
-    if (/fetch|network/i.test(m)) return 'No hi ha connexió amb el servidor.';
-    return m;
-  };
   const hora = (iso) => { if (!iso) return '—'; const d = new Date(iso); return d.toLocaleString('ca', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
 
   /* ---------- Secció d'Ajustos ---------- */
@@ -217,61 +233,37 @@ const Sync = (() => {
       return `<div class="section" id="seccioSync"><h2>Sincronització</h2>
         <p class="help">Encara no està configurada. De moment, les dades es guarden només en aquest dispositiu.</p></div>`;
     }
-    if (!sessio) {
+    if (!clau || estat === 'clau-dolenta') {
       return `<div class="section" id="seccioSync"><h2>Sincronització</h2>
-        <p class="help">Entra amb el teu correu per tenir les mateixes dades al iPhone i a l'ordinador.</p>
-        <form id="formSync" class="sync-form">
-          <input type="email" name="email" placeholder="correu@exemple.com" autocomplete="username" required>
-          <input type="password" name="pass" placeholder="Contrasenya (mínim 6 caràcters)" autocomplete="current-password" required minlength="6">
-          <div class="grp">
-            <button class="btn primary" value="entra">Entra</button>
-            <button class="btn" value="registra">Crea el compte</button>
-          </div>
-          <p class="hint">La primera vegada, fes «Crea el compte». Només poden entrar els correus autoritzats.</p>
+        ${estat === 'clau-dolenta' ? '<p class="warn">Aquesta clau no és correcta. Revisa-la i torna-la a enganxar.</p>' : ''}
+        <p class="help">Vincula aquest dispositiu <b>una sola vegada</b> per tenir la mateixa agenda al iPhone i a l'ordinador. Enganxa aquí la teva clau privada:</p>
+        <form id="formClau" class="sync-form">
+          <input name="clau" placeholder="Clau privada" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+          <div class="grp"><button class="btn primary">Vincula</button></div>
         </form></div>`;
     }
     const pend = pendents().length;
     return `<div class="section" id="seccioSync"><h2>Sincronització</h2>
-      ${membre === false
-        ? `<p class="warn">El correu <b>${esc(sessio.user.email)}</b> no té accés a les dades. Demana que l'afegeixin a la llista de membres.</p>`
-        : `<p class="help">Connectat com <b>${esc(sessio.user.email)}</b>${PROVES ? ' · <span class="proves">PROVES</span>' : ''}<br>
-           Estat: <b>${TEXTOS[estat] || '—'}</b> · Darrera actualització: ${hora(meta.ultima)}${pend ? ` · ${pend} canvis per pujar` : ''}
-           ${estat === 'error' && detall ? `<br><span class="hint">${esc(traduccio(detall))}</span>` : ''}</p>`}
+      <p class="help">Aquest dispositiu està <b>vinculat</b>${PROVES ? ' · <span class="proves">PROVES</span>' : ''}.<br>
+        Estat: <b>${TEXTOS[estat] || '—'}</b> · Darrera actualització: ${hora(meta.ultima)}${pend ? ` · ${pend} canvis per pujar` : ''}
+        ${estat === 'error' && detall ? `<br><span class="hint">${esc(detall)}</span>` : ''}</p>
       <div class="grp">
-        ${membre ? '<button class="btn" id="btnSyncAra">Sincronitza ara</button>' : ''}
-        <button class="btn" id="btnSurt">Surt</button>
+        <button class="btn" id="btnSyncAra">Sincronitza ara</button>
+        <button class="btn" id="btnDesvincula">Desvincula aquest dispositiu</button>
       </div></div>`;
   }
 
   function bind() {
-    const f = $('#formSync');
-    if (f) {
-      f.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const accio = e.submitter?.value || 'entra';
-        const d = new FormData(f);
-        const email = String(d.get('email')).trim(), pass = String(d.get('pass'));
-        if (!email || pass.length < 6) { toast('Escriu el correu i una contrasenya de 6 caràcters o més.'); return; }
-        f.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-        try {
-          if (accio === 'registra') {
-            const { data, error } = await sb.auth.signUp({ email, password: pass, options: { emailRedirectTo: location.origin + location.pathname } });
-            if (error) throw error;
-            if (!data.session) toast('Compte creat. Confirma el correu i després fes «Entra».');
-          } else {
-            const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-            if (error) throw error;
-          }
-        } catch (err) {
-          toast(traduccio(err.message));
-        }
-        f.querySelectorAll('button').forEach((b) => { b.disabled = false; });
-      });
-    }
+    $('#formClau')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = String(new FormData(e.target).get('clau') || '').trim();
+      if (!/^[A-Za-z0-9]{16,}$/.test(v)) { toast('La clau no té el format correcte.'); return; }
+      vincula(v);
+    });
     $('#btnSyncAra')?.addEventListener('click', () => programa(0));
-    $('#btnSurt')?.addEventListener('click', async () => {
-      if (pendents().length && !confirm('Hi ha canvis que encara no s\'han pujat. Vols sortir igualment? Es quedaran en aquest dispositiu.')) return;
-      await sb.auth.signOut();
+    $('#btnDesvincula')?.addEventListener('click', () => {
+      if (!confirm('Desvincular aquest dispositiu? Les dades es quedaran aquí, però deixaran de sincronitzar-se fins que el tornis a vincular.')) return;
+      desvincula();
     });
   }
 
@@ -280,29 +272,19 @@ const Sync = (() => {
     const b = $('#syncBtn');
     if (b) b.addEventListener('click', () => { ui.view = 'config'; render(); window.scrollTo(0, 0); });
     if (!disponible) { posaEstat('off'); return; }
-    sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
-      auth: { persistSession: true, autoRefreshToken: true, storageKey: 'podcasts-auth' },
-    });
-    sb.auth.onAuthStateChange((ev, s) => {
-      sessio = s;
-      setTimeout(() => {
-        if (s) {
-          if (membre === null || ev === 'SIGNED_IN') comprovaMembre();
-        } else {
-          membre = null; tancaCanal(); posaEstat('sense-sessio');
-        }
-        if (ui.view === 'config') render();
-      }, 0);
-    });
+    clau = llegeixClau();
+    client();
     addEventListener('online', () => programa(0));
     addEventListener('offline', () => posaEstat('offline'));
+    addEventListener('focus', () => programa(0));
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') programa(0); });
-    setInterval(() => programa(0), 60000);
-    posaEstat('sense-sessio');
+    // Comprova canvis d'altres dispositius cada 20 segons mentre l'app és oberta
+    setInterval(() => { if (document.visibilityState === 'visible') programa(0); }, 20000);
+    if (clau) programa(0); else posaEstat('sense-clau');
   }
 
   return {
-    canvi() { if (!aplicant && sessio && membre) { posaEstat('sync'); programa(); } },
+    canvi() { if (!aplicant && sb && valida !== false) { posaEstat('sync'); programa(); } },
     html, bind, inicia,
   };
 })();

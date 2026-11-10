@@ -95,8 +95,8 @@ h2, h3 { font-family: var(--font-title); font-weight: 600; letter-spacing: .3px;
 .sync-pill svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 .sync-pill[data-estat=ok] svg { stroke: #69DB7C; }
 .sync-pill[data-estat=sync] svg { stroke: #FFD43B; }
-.sync-pill[data-estat=sense-sessio], .sync-pill[data-estat=nomembre] { border-color: #E8590C; }
-.sync-pill[data-estat=sense-sessio] svg, .sync-pill[data-estat=error] svg, .sync-pill[data-estat=nomembre] svg { stroke: #FF8A4C; }
+.sync-pill[data-estat=sense-clau], .sync-pill[data-estat=clau-dolenta] { border-color: #E8590C; }
+.sync-pill[data-estat=sense-clau] svg, .sync-pill[data-estat=error] svg, .sync-pill[data-estat=clau-dolenta] svg { stroke: #FF8A4C; }
 .sync-pill[data-estat=offline] svg { stroke: #999; }
 .sync-form { display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
 .proves { background: #E8590C; color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 700; opacity: 1; }
@@ -307,7 +307,7 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   .brand b { font-size: 18px; }
   .sync-pill[data-estat=ok] span, .sync-pill[data-estat=sync] span, .sync-pill[data-estat=offline] span { display: none; }
   .sync-pill { padding: 6px; }
-  .sync-pill[data-estat=sense-sessio], .sync-pill[data-estat=error], .sync-pill[data-estat=nomembre] { padding: 4px 10px 4px 8px; }
+  .sync-pill[data-estat=sense-clau], .sync-pill[data-estat=error], .sync-pill[data-estat=clau-dolenta] { padding: 4px 10px 4px 8px; }
 
   /* Pestanyes a baix, com una app */
   .tabs {
