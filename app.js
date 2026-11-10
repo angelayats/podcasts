@@ -349,11 +349,12 @@ function artistes(eps) {
 function grupsStats() {
   const any = ui.anyStats || new Date().getFullYear(), avui = ymd(new Date());
   const tots = delProg(state.gravacions);
-  const del = tots.filter((g) => dataRef(g).startsWith(String(any)));
+  const hist = any === 'tots';
+  const del = hist ? tots : tots.filter((g) => dataRef(g).startsWith(String(any)));
   const pid = progStats();
   const grups = {
-    gravats: [`Episodis gravats ${any}`, del.filter((g) => GRAVADA.includes(g.estat))],
-    publicats: [`Publicats ${any}`, del.filter((g) => g.estat === 'publicat')],
+    gravats: [`Episodis gravats ${hist ? '· històric' : any}`, del.filter((g) => GRAVADA.includes(g.estat))],
+    publicats: [`Publicats ${hist ? '· històric' : any}`, del.filter((g) => g.estat === 'publicat')],
     perPublicar: ['Pendents de publicar', tots.filter((g) => g.estat === 'gravat' || g.estat === 'editat')],
     perGravar: ['Pendents de gravar', tots.filter((g) => g.estat === 'pendent' || g.estat === 'confirmat')],
   };
@@ -399,8 +400,9 @@ function llistaStats() {
     if (teConvidats()) gent = grups.potencials ? [...new Set([...convidatsPers().filter((p) => !progStats() || historial(p).some((g) => g.programaId === progStats())), ...grups.potencials[1]])] : [];
   } else if (sel.tipus === 'mes' || sel.tipus === 'prog') {
     const p = prog(sel.prog);
-    eps = grups.gravats[1].filter((g) => (g.programaId || '') === sel.prog && (sel.tipus === 'prog' || Number(dataRef(g).slice(5, 7)) === sel.mes));
-    titol = `${p?.nom || 'Sense programa'} · ${sel.tipus === 'mes' ? cap(MESOS[sel.mes - 1]) + ' ' : ''}${ui.anyStats || new Date().getFullYear()}`;
+    eps = grups.gravats[1].filter((g) => (g.programaId || '') === sel.prog && (sel.tipus === 'prog' || periode(sel.mes)(g)));
+    const any = ui.anyStats || new Date().getFullYear();
+    titol = `${p?.nom || 'Sense programa'} · ${sel.tipus === 'mes' ? (sel.mes > 12 ? sel.mes : cap(MESOS[sel.mes - 1]) + ' ' + any) : (any === 'tots' ? 'històric' : any)}`;
   } else {
     const [nom, llista] = grups[sel.tipus];
     titol = nom;
@@ -420,21 +422,27 @@ function llistaStats() {
     ${parts.map(([x, nom, fila]) => (parts.length > 1 ? `<h4>${nom}</h4>` : '') + x.map(fila).join('')).join('')}
   </div>`;
 }
+// Període de la taula: 1–12 = mes de l'any triat; un número d'any (p. ex. 2026) = tot aquell any (vista històrica)
+const periode = (m) => (m > 12 ? (g) => dataRef(g).startsWith(String(m)) : (g) => Number(dataRef(g).slice(5, 7)) === m);
 function estadistiques() {
   const anys = [...new Set([new Date().getFullYear(), ...state.gravacions.filter(dataRef).map((g) => Number(dataRef(g).slice(0, 4)))])].sort((a, b) => b - a);
   const any = ui.anyStats || new Date().getFullYear();
-  const del = delProg(state.gravacions).filter((g) => dataRef(g).startsWith(String(any)));
+  const hist = any === 'tots';
+  const del = hist ? delProg(state.gravacions) : delProg(state.gravacions).filter((g) => dataRef(g).startsWith(String(any)));
+  // Files de la taula: els mesos de l'any triat, o els anys a la vista històrica
+  const periodes = hist
+    ? [...new Set(del.filter(dataRef).map((g) => Number(dataRef(g).slice(0, 4))))].sort((a, b) => a - b).map((y) => ({ m: y, llarg: String(y), curt: String(y) }))
+    : MESOS.map((nom, i) => ({ m: i + 1, llarg: cap(nom), curt: cap(nom).slice(0, 3) }));
   const gravades = del.filter((g) => GRAVADA.includes(g.estat));
   const publicades = del.filter((g) => g.estat === 'publicat');
   const progs = progStats() ? [prog(progStats())]
     : [...state.programes, ...(del.some((g) => !prog(g.programaId)) ? [{ id: '', nom: 'Sense programa', color: '#868E96' }] : [])];
-  const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && Number(dataRef(g).slice(5, 7)) === mes).length;
-  const max = Math.max(1, ...progs.flatMap((p) => [...Array(12)].map((_, i) => compta(gravades, p.id, i + 1))));
+  const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && periode(mes)(g)).length;
+  const max = Math.max(1, ...progs.flatMap((p) => periodes.map(({ m }) => compta(gravades, p.id, m))));
 
-  const files = [...Array(12)].map((_, i) => {
-    const mes = i + 1;
+  const files = periodes.map(({ m: mes, llarg, curt }) => {
     const total = progs.reduce((s, p) => s + compta(gravades, p.id, mes), 0);
-    return `<tr class="${total ? '' : 'buit'}"><th><span class="llarg">${cap(MESOS[i])}</span><span class="curt">${cap(MESOS[i]).slice(0, 3)}</span></th>${progs.map((p) => {
+    return `<tr class="${total ? '' : 'buit'}"><th><span class="llarg">${llarg}</span><span class="curt">${curt}</span></th>${progs.map((p) => {
       const gv = compta(gravades, p.id, mes), pb = compta(publicades, p.id, mes);
       const sel = ui.statsSel?.tipus === 'mes' && ui.statsSel.prog === p.id && ui.statsSel.mes === mes;
       return `<td><button class="barra ${sel ? 'on' : ''}" style="--c:${p.color}" data-action="stats" data-tipus="mes" data-prog="${p.id}" data-mes="${mes}" ${gv ? '' : 'disabled'}><i style="width:${(gv / max) * 100}%"></i><span><span class="llarg">${gv ? `${gv} grav.${pb ? ` · ${pb} publ.` : ''}` : '—'}</span><span class="curt">${gv ? `${gv}${pb ? ` · ${pb}` : ''}` : '—'}</span></span></button></td>`;
@@ -457,7 +465,7 @@ function estadistiques() {
     <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Estadístiques</h2></div>
       <div class="grp" style="width:auto">
         <select data-filter="progStats" aria-label="Programa" style="width:auto">${progOptions(progStats(), 'Tots els programes')}</select>
-        <select data-filter="any" aria-label="Any" style="width:auto">${anys.map((a) => `<option ${a === any ? 'selected' : ''}>${a}</option>`).join('')}</select>
+        <select data-filter="any" aria-label="Any" style="width:auto">${anys.map((a) => `<option ${a === any ? 'selected' : ''}>${a}</option>`).join('')}<option value="tots" ${hist ? 'selected' : ''}>Històric</option></select>
       </div></div>
     <div class="metrics">${Object.entries(grupsStats()).map(([k, [nom, llista]]) =>
       `<button class="metric ${ui.statsSel?.tipus === k ? 'on' : ''}" data-action="stats" data-tipus="${k}"><span>${esc(nom)}</span><b>${llista.length}</b></button>`).join('')}
@@ -465,7 +473,7 @@ function estadistiques() {
     <div class="toolbar"><input type="search" id="cercaStats" value="${esc(ui.cercaStats || '')}" placeholder="🔎 ${placeholder} per saber si ja ha sortit…"></div>
     <div id="statsLlista">${llistaStats()}</div>
     <div class="panel"><table class="taula-stats">
-      <thead><tr><th>Mes</th>${progs.map((p) => `<th><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</th>`).join('')}</tr></thead>
+      <thead><tr><th>${hist ? 'Any' : 'Mes'}</th>${progs.map((p) => `<th><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</th>`).join('')}</tr></thead>
       <tbody>${files}${totals}</tbody></table></div>
     <p class="hint" style="margin-top:8px">Toca una xifra, un mes o un total per veure'n el llistat. «Gravats» compta els episodis en estat Gravat, Editat o Publicat. «Publicats», només els Publicats. Si un episodi no té data de gravació, es compta pel mes d'emissió.</p>
   </div>`;
@@ -1197,7 +1205,7 @@ $('#main').addEventListener('change', (e) => {
   if (f === 'properes') ui.nomesProperes = t.checked;
   if (f === 'tipus') { ui.agendaTipus = t.value; desaPref('agendaTipus', t.value); }
   if (f === 'emissions') { ui.veureEmissions = t.checked; desaPref('veureEmissions', t.checked); render(); return; }
-  if (f === 'any') { ui.anyStats = Number(t.value); render(); return; }
+  if (f === 'any') { ui.anyStats = t.value === 'tots' ? 'tots' : Number(t.value); ui.statsSel = null; render(); return; }
   if (f === 'progStats') { ui.progStats = t.value; ui.statsSel = null; desaPref('progStats', t.value); render(); return; }
   ui.view === 'agenda' ? renderTaula() : render();
 });
