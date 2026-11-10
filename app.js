@@ -258,6 +258,7 @@ function renderAgenda(m) {
           <option value="gravacions" ${ui.agendaTipus === 'gravacions' ? 'selected' : ''}>🎙️ Només gravacions</option>
           <option value="tots" ${ui.agendaTipus === 'tots' ? 'selected' : ''}>Gravacions i emissions</option></select>
         <label class="check"><input type="checkbox" data-filter="properes" ${ui.nomesProperes ? 'checked' : ''}> Només properes</label>
+        <button class="btn" data-action="imprimeix" data-que="agenda">🖨 Imprimeix</button>
       </div>
     </div>
     <div id="taula"></div>`;
@@ -272,6 +273,7 @@ function renderTaula() {
     .filter((g) => !ui.nomesProperes || !dataRef(g) || (g.data || '') >= avui || (g.emissio || '') >= avui)
     .filter((g) => !q || [titolG(g), ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
     .sort(ordena);
+  ui.filesAgenda = rows;
   const t = $('#taula');
   if (!rows.length) {
     t.innerHTML = `<div class="panel" style="padding:24px;text-align:center"><p class="empty">No hi ha cap gravació${ui.nomesProperes ? ' programada' : ''} amb aquests filtres.</p>
@@ -415,9 +417,10 @@ function llistaStats() {
   arts = arts.filter((a) => coincideix(a.nom + ' ' + a.eps.map(textEp).join(' ')));
   const n = (x, u, v) => (x.length ? `${x.length} ${x.length === 1 ? u : v}` : '');
   const parts = [[gent, 'Convidats', filaConvidat], [arts, 'Artistes', filaArtista], [eps, 'Episodis', filaEpisodi]].filter(([x]) => x.length);
+  ui.llistaStats = { titol: titol + (q ? ` · cerca «${ui.cercaStats}»` : ''), gent, arts, eps };
   return `<div class="panel llista-stats">
     <div class="cap-llista"><b>${esc(titol)}</b><span class="hint">${[n(gent, 'convidat', 'convidats'), n(arts, 'artista', 'artistes'), n(eps, 'episodi', 'episodis')].filter(Boolean).join(' · ')}</span>
-      ${sel ? '<button class="btn small" data-action="stats" data-tipus="">Tanca</button>' : ''}</div>
+      <span class="acts-llista">${parts.length ? '<button class="btn small" data-action="imprimeix" data-que="stats">🖨 Imprimeix</button>' : ''}${sel ? '<button class="btn small" data-action="stats" data-tipus="">Tanca</button>' : ''}</span></div>
     ${!parts.length ? `<p class="empty" style="padding:12px">${q ? `Cap coincidència: «${esc(ui.cercaStats)}» no ha sortit mai${progStats() ? ' a ' + esc(prog(progStats()).nom) : ''}.` : 'No hi ha res en aquest llistat.'}</p>` : ''}
     ${parts.map(([x, nom, fila]) => (parts.length > 1 ? `<h4>${nom}</h4>` : '') + x.map(fila).join('')).join('')}
   </div>`;
@@ -565,7 +568,8 @@ function renderPersones(m) {
     <div class="cards equip" id="llistaEquip">${llistaEquip()}</div>
 
     <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Convidats <span class="hint" id="compteConv"></span></h2></div>
-      <button class="btn primary" data-action="nou-convidat">+ Nou convidat</button></div>
+      <div class="grp" style="width:auto"><button class="btn" data-action="imprimeix" data-que="convidats">🖨 Imprimeix</button>
+      <button class="btn primary" data-action="nou-convidat">+ Nou convidat</button></div></div>
     <div class="cards equip" id="llistaConv">${llistaConvidats()}</div>`;
   // El cercador queda just sota la capçalera quan es baixa la pantalla
   document.documentElement.style.setProperty('--alt-cap', (document.querySelector('header')?.offsetHeight || 0) + 'px');
@@ -600,6 +604,7 @@ function llistaConvidats() {
       return { p, vingut: h.filter((g) => jaGravada(g, avui)), propera: h.filter((g) => !jaGravada(g, avui)).pop() };
     })
     .filter(({ p, vingut, propera }) => !f || (f === 'vingut' && vingut.length) || (f === 'propers' && propera) || (f === 'potencials' && p.potencial));
+  ui.filesConv = conv;
   return conv.map(({ p, vingut, propera }) => {
     return `<div class="item persona">
       <div class="avatar conv">${esc(inicials(p.nom))}</div>
@@ -1166,6 +1171,7 @@ $('#main').addEventListener('click', (e) => {
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
     case 'escolta': return Reproductor.tria();
+    case 'imprimeix': return imprimeixLlista(el.dataset.que);
     case 'stats': {
       const nou = el.dataset.tipus ? { tipus: el.dataset.tipus, prog: el.dataset.prog, mes: Number(el.dataset.mes) || 0 } : null;
       const igual = nou && ui.statsSel && JSON.stringify(nou) === JSON.stringify(ui.statsSel);
@@ -1220,6 +1226,63 @@ $('#main').addEventListener('input', (e) => {
   }
 });
 mobil.addEventListener('change', render);
+
+/* ---------- Imprimir llistats ---------- */
+// Prepara una versió per al paper (taules en blanc i negre, amb casella i columna de notes) i obre la impressió
+function imprimeix(titol, seccions) {
+  let z = $('#zonaImpressio');
+  if (!z) { z = Object.assign(document.createElement('div'), { id: 'zonaImpressio' }); document.body.append(z); }
+  const avui = new Date();
+  z.innerHTML = `<header><h1>${esc(titol)}</h1><p>${esc(APP.nom)} · imprès el ${avui.getDate()}/${avui.getMonth() + 1}/${avui.getFullYear()}</p></header>`
+    + seccions.filter((x) => x.files.length).map((x) => `${seccions.length > 1 || x.nom ? `<h2>${esc(x.nom)} (${x.files.length})</h2>` : ''}
+      <table><thead><tr><th class="c">✓</th>${x.cols.map((c) => `<th>${esc(c)}</th>`).join('')}<th class="n">Notes</th></tr></thead>
+      <tbody>${x.files.map((f) => `<tr><td class="c">☐</td>${f.map((v) => `<td>${esc(v ?? '')}</td>`).join('')}<td class="n"></td></tr>`).join('')}</tbody></table>`).join('');
+  const titolAbans = document.title;
+  document.title = titol;   // nom del PDF si es desa
+  window.addEventListener('afterprint', () => { document.title = titolAbans; }, { once: true });
+  setTimeout(() => window.print(), 50);
+}
+const grav = (g) => (g.data ? `${dataCurta(g.data)} ${g.hora || ''}`.trim() : '—');
+const emis = (g) => (g.emissio ? `${dataCurta(g.emissio)}${g.horaEmissio ? ' ' + g.horaEmissio : ''}` : '—');
+const seccioEpisodis = (eps, nom = 'Episodis') => ({
+  nom, cols: ['Núm.', 'Títol', 'Programa', 'Gravació', 'Emissió', 'Estat'],
+  files: eps.map((g) => [g.numero || '', g.titol, progNom(g), grav(g), emis(g), estatNom(g.estat)]),
+});
+function situacioConv(p) {
+  const h = historial(p), fets = h.filter((g) => jaGravada(g)), previst = h.filter((g) => !jaGravada(g)).pop();
+  return [p.potencial ? 'Potencial' : '', fets.length ? `Ha vingut ${fets.length}× (${fets.map((g) => titolG(g)).join(', ')})` : '',
+    previst ? `Previst: ${titolG(previst)}${previst.data ? ' · ' + dataCurta(previst.data) : ''}` : ''].filter(Boolean).join(' · ') || 'Encara no ha vingut';
+}
+const seccioConvidats = (gent, nom = 'Convidats') => ({
+  nom, cols: ['Nom', 'Telèfon', 'Correu', 'Situació'], files: gent.map((p) => [p.nom, p.telefon || '', p.email || '', situacioConv(p)]),
+});
+function imprimeixLlista(que) {
+  const nomProg = (id) => (id ? prog(id)?.nom : 'Tots els programes');
+  if (que === 'agenda') {
+    const rows = ui.filesAgenda || [];
+    if (!rows.length) return toast('No hi ha res per imprimir amb aquests filtres.');
+    const titol = ['Agenda', nomProg(ui.filtrePrograma), ui.agendaTipus === 'tots' ? 'gravacions i emissions' : 'gravacions',
+      ui.filtreEstat ? estatNom(ui.filtreEstat) : '', ui.nomesProperes ? 'properes' : '', ui.cerca ? `cerca «${ui.cerca}»` : ''].filter(Boolean).join(' · ');
+    return imprimeix(titol, [{ nom: '', cols: ['Gravació', 'Horari', 'Emissió', 'Programa', 'Títol', 'Estudi', 'Convidats', 'Estat'],
+      files: rows.map((g) => [dataCurta(g.data), g.data ? horari(g) : '—', emis(g), progNom(g), titolG(g), g.estudi || '', nomsConvidats(g).join(', '), estatNom(g.estat)]) }]);
+  }
+  if (que === 'convidats') {
+    const conv = (ui.filesConv || []).map((x) => x.p);
+    if (!conv.length) return toast('No hi ha cap convidat per imprimir.');
+    const filtre = { vingut: 'ja han vingut', propers: 'amb gravació pendent', potencials: 'potencials' }[ui.filtreConv || ''];
+    return imprimeix(['Convidats', filtre, ui.cercaConv ? `cerca «${ui.cercaConv}»` : ''].filter(Boolean).join(' · '), [seccioConvidats(conv, '')]);
+  }
+  if (que === 'stats') {
+    const l = ui.llistaStats;
+    if (!l) return;
+    const titol = [l.titol, progStats() ? nomProg(progStats()) : ''].filter((x) => x && !l.titol.includes(x)).join(' · ');
+    return imprimeix(titol, [
+      seccioConvidats(l.gent),
+      { nom: 'Artistes', cols: ['Artista', 'Episodis'], files: l.arts.map((a) => [a.nom, a.eps.map((g) => `${titolG(g)} (${estatNom(g.estat)})`).join(' · ')]) },
+      seccioEpisodis(l.eps),
+    ]);
+  }
+}
 
 /* ---------- Reproductor d'àudio (llegeix el fitxer del dispositiu; no es puja enlloc) ---------- */
 const Reproductor = (() => {

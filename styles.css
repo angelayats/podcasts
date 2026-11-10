@@ -492,3 +492,25 @@ body.amb-reproductor main { padding-bottom: 130px; }
 .repeteix .btn { margin-top: 8px; }
 .repeteix .hint { display: block; margin-top: 4px; }
 .repeteix input:disabled { opacity: .5; }
+
+/* ---------- Impressió ---------- */
+#zonaImpressio { display: none; }
+.acts-llista { margin-left: auto; display: inline-flex; gap: 6px; }
+.cap-llista .acts-llista .btn { margin-left: 0; }
+@media print {
+  @page { margin: 12mm; }
+  html, body { background: #fff !important; color: #000 !important; }
+  body > *:not(#zonaImpressio) { display: none !important; }
+  #zonaImpressio { display: block !important; font: 10pt/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; color: #000; }
+  #zonaImpressio header { border-bottom: 2px solid #000; margin-bottom: 10px; padding-bottom: 4px; }
+  #zonaImpressio h1 { font-size: 15pt; margin: 0; }
+  #zonaImpressio header p { margin: 2px 0 0; font-size: 9pt; color: #444; }
+  #zonaImpressio h2 { font-size: 11pt; margin: 14px 0 4px; }
+  #zonaImpressio table { width: 100%; border-collapse: collapse; }
+  #zonaImpressio th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .3px; border-bottom: 1.5px solid #000; padding: 4px 5px; }
+  #zonaImpressio td { border-bottom: .5px solid #999; padding: 5px; vertical-align: top; }
+  #zonaImpressio tr { break-inside: avoid; }
+  #zonaImpressio thead { display: table-header-group; }
+  #zonaImpressio .c { width: 14px; text-align: center; }
+  #zonaImpressio .n { width: 22%; }
+}
