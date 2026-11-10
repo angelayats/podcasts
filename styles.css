@@ -487,3 +487,8 @@ body.amb-reproductor main { padding-bottom: 130px; }
   body.amb-reproductor .nova { bottom: calc(190px + var(--safe-b, 0px)); }
   body.amb-reproductor main { padding-bottom: 220px; }
 }
+
+/* ---------- Repeticions ---------- */
+.repeteix .btn { margin-top: 8px; }
+.repeteix .hint { display: block; margin-top: 4px; }
+.repeteix input:disabled { opacity: .5; }

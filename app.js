@@ -948,9 +948,20 @@ function openGravacio(g, dataPerDefecte) {
       <div class="checks">${CHECKLIST.map(([k, nom]) => `<label><input type="checkbox" name="checklist" value="${k}" ${g.checklist?.[k] ? 'checked' : ''}> ${nom}</label>`).join('')}</div>
     </fieldset>
     <label>Notes <textarea name="notes" rows="3">${esc(g.notes)}</textarea></label>
-    ${nou ? '<label>Repetir cada setmana <input type="number" inputmode="numeric" name="repeticions" min="0" max="52" value="0"><span class="hint">Nombre de setmanes addicionals (0 = només aquesta)</span></label>' : ''}
+    ${nou || g.data ? `<fieldset class="repeteix"><legend>🔁 ${nou ? 'Repetició' : 'Copia o repeteix aquesta sessió'}</legend>
+      <div class="row">
+        <label>${nou ? 'Es repeteix' : 'Crea'} <select name="repeteix">
+          <option value="">${nou ? 'No es repeteix' : '—'}</option>
+          ${nou ? '' : '<option value="un">Una còpia un altre dia</option>'}
+          <option value="7">Cada setmana</option><option value="14">Cada 2 setmanes</option><option value="mes">Cada mes</option>
+        </select></label>
+        <label><span id="lblFins">Fins al</span> <input type="date" name="finsA"></label>
+      </div>
+      <span class="hint" id="resumRep"></span>
+      ${nou ? '' : '<button type="button" class="btn small" data-dlg="copia">📋 Crea les còpies</button><span class="hint">Es copien el títol, el programa, l\'hora, la durada, l\'estudi i l\'equip (no els convidats ni les notes).</span>'}
+    </fieldset>` : ''}
     <p class="warn" id="avis"></p>`, {
-    extraButtons: nou ? '' : '<button type="button" class="btn" data-dlg="duplica">Duplica</button>',
+    extraButtons: '',
     onSave(f) {
       const dades = {
         titol: f.get('titol').trim(), programaId: f.get('programaId'), data: f.get('data'), hora: f.get('hora') || '10:00',
@@ -963,9 +974,9 @@ function openGravacio(g, dataPerDefecte) {
       };
       if (!dades.titol) { toast('Cal posar un títol.'); return false; }
       if (!dades.data && !dades.emissio) { toast("Cal posar la data de gravació o la d'emissió."); return false; }
-      const reps = nou && dades.data ? Math.min(52, Math.max(0, Number(f.get('repeticions')) || 0)) : 0;
-      const xocsPrevis = [{ ...g, ...dades }];
-      for (let i = 1; i <= reps; i++) xocsPrevis.push({ ...g, ...dades, id: 'x' + i, data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
+      const datesRep = nou && dades.data ? datesRepeticio(dades.data, f.get('repeteix'), f.get('finsA')) : [];
+      if (nou && f.get('repeteix') && !datesRep.length) { toast('Tria fins a quin dia es repeteix.'); return false; }
+      const xocsPrevis = [{ ...g, ...dades }, ...datesRep.map((d, i) => ({ ...g, ...dades, id: 'x' + i, data: d }))];
       const xocs = xocsPrevis.flatMap(conflictes);
       if (xocs.length) {
         const llista = [...new Set(xocs)].slice(0, 5).map((o) => `• ${dataCurta(o.data)} ${horari(o)} – ${progNom(o)}: ${o.titol}`).join('\n');
@@ -983,26 +994,36 @@ function openGravacio(g, dataPerDefecte) {
       if (dades.estat !== 'pendent' && dades.estat !== 'cancellat') ids.map(pers).forEach((p) => { if (p?.potencial) p.potencial = false; });
       dades.convidats = ids.map(pers).filter(Boolean).map((p) => p.nom).join(', ');   // text per al calendari del iPhone
       const noves = [{ ...g, ...dades }];
-      for (let i = 1; i <= reps; i++) noves.push({ ...g, ...dades, checklist: {}, emissio: '', numero: '', enllac: '', id: uid(), data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
+      if (datesRep.length) { noves[0].serie = noves[0].id; noves.push(...copiesSessio(noves[0], datesRep, { ambNotes: true })); }
       if (nou) state.gravacions.push(...noves);
       else Object.assign(g, dades);
       ui.diaSel = dataRef(dades);
-      toast(reps ? `S'han creat ${noves.length} gravacions.` : 'Gravació desada.');
+      toast(noves.length > 1 ? `S'han creat ${noves.length} gravacions.` : 'Gravació desada.');
     },
     onDelete: nou ? null : () => {
-      if (!confirm(`Eliminar la gravació «${g.titol}»?`)) return false;
-      state.gravacions = state.gravacions.filter((x) => x.id !== g.id);
+      if (!confirm(`Eliminar la gravació «${g.titol}» del ${dataCurta(g.data || g.emissio)}?`)) return false;
+      const seguents = g.serie ? state.gravacions.filter((x) => x.serie === g.serie && x.id !== g.id && (x.data || '') > (g.data || '')) : [];
+      const totes = seguents.length && confirm(`Aquesta sessió es repeteix. Vols eliminar també les ${seguents.length} sessions següents de la sèrie?\n\nD'acord: totes les següents\nCancel·la: només aquesta`);
+      const fora = new Set([g.id, ...(totes ? seguents.map((x) => x.id) : [])]);
+      state.gravacions = state.gravacions.filter((x) => !fora.has(x.id));
+      toast(fora.size > 1 ? `S'han eliminat ${fora.size} sessions.` : 'Gravació eliminada.');
     },
     onExtra(action) {
-      if (action === 'duplica') {
-        closeDialog();
-        openGravacio(null, g.data);
-        const f = $('#dlgForm');
-        ['titol', 'programaId', 'hora', 'durada', 'estudi', 'tecnic', 'notes', 'horaEmissio'].forEach((k) => { f.elements[k].value = g[k] ?? ''; });
-        f.querySelectorAll('input[name=presentadors]').forEach((c) => { c.checked = (g.presentadors || []).includes(c.value); });
-        f.elements.convidatsNous.value = nomsConvidats(g).join(', ');
-        f.elements.titol.value = g.titol + ' (còpia)';
-        f.dispatchEvent(new Event('change'));
+      if (action === 'copia') {
+        const f = $('#dlgForm').elements;
+        const dates = datesRepeticio(g.data, f.repeteix.value, f.finsA.value);
+        if (!f.repeteix.value) { toast('Tria primer què vols crear (un altre dia, cada setmana…).'); return; }
+        if (!dates.length) { toast(f.repeteix.value === 'un' ? 'Tria el dia de la còpia.' : 'Tria fins a quin dia es repeteix.'); return; }
+        const copies = copiesSessio(g, dates);
+        const xocs = copies.flatMap(conflictes);
+        if (xocs.length) {
+          const llista = [...new Set(xocs)].slice(0, 5).map((o) => `• ${dataCurta(o.data)} ${horari(o)} – ${progNom(o)}: ${o.titol}`).join('\n');
+          if (!confirm(`Atenció: alguna còpia coincideix amb altres gravacions:\n\n${llista}\n\nVols crear-les igualment?`)) return;
+        }
+        if (copies.length > 1) g.serie = g.serie || g.id;
+        state.gravacions.push(...copies);
+        save(); closeDialog(); render();
+        toast(copies.length === 1 ? `Còpia creada el ${dataCurta(copies[0].data)}.` : `S'han creat ${copies.length} sessions, fins al ${dataCurta(copies.at(-1).data)}.`);
       }
     },
   });
@@ -1014,11 +1035,44 @@ function openGravacio(g, dataPerDefecte) {
       presentadors: [...f.querySelectorAll('input[name=presentadors]:checked')].map((c) => c.value), tecnic: f.elements.tecnic.value };
     const x = prova.data && prova.hora ? conflictes(prova) : [];
     $('#avis').textContent = x.length ? `⚠ Coincideix amb: ${x.map((o) => `${horari(o)} ${progNom(o)} – ${o.titol}`).join('; ')}` : '';
+    if (f.elements.repeteix) {
+      const tipus = f.elements.repeteix.value, base = f.elements.data.value || g.data;
+      $('#lblFins').textContent = tipus === 'un' ? 'Dia de la còpia' : 'Fins al';
+      f.elements.finsA.disabled = !tipus;
+      const dates = base ? datesRepeticio(base, tipus, f.elements.finsA.value) : [];
+      $('#resumRep').textContent = !tipus ? '' : !dates.length ? (tipus === 'un' ? 'Tria el dia.' : 'Tria fins a quin dia.')
+        : `${nou ? 'A més d\'aquesta, es crearan' : 'Es crearan'} ${dates.length} ${dates.length === 1 ? 'sessió' : 'sessions'}: ${dates.slice(0, 4).map(dataCurta).join(', ')}${dates.length > 4 ? ` … fins al ${dataCurta(dates.at(-1))}` : ''}.`;
+    }
   };
   f.oninput = comprova;
   f.onchange = comprova;
   comprova();
   if (!mobil.matches && nou) f.elements.titol.focus();
+}
+
+/* ---------- Repeticions i còpies de sessions ---------- */
+// Dates a partir d'una data: «un» = només la data triada; 7/14 = cada N dies; «mes» = el mateix dia de cada mes
+function datesRepeticio(base, tipus, finsA) {
+  if (!tipus || !finsA || !base) return [];
+  if (tipus === 'un') return finsA !== base ? [finsA] : [];
+  const out = [], b = parseYmd(base);
+  for (let i = 1; out.length < 104; i++) {
+    const d = tipus === 'mes' ? new Date(b.getFullYear(), b.getMonth() + i, b.getDate()) : addDays(b, Number(tipus) * i);
+    if (tipus === 'mes' && d.getDate() !== b.getDate()) continue;   // p. ex. el 31 en un mes que no en té
+    if (ymd(d) > finsA) break;
+    out.push(ymd(d));
+  }
+  return out;
+}
+// Còpies d'una sessió en altres dates (sense convidats, número, emissió ni checklist)
+function copiesSessio(src, dates, { ambNotes = false } = {}) {
+  const estat = ['pendent', 'confirmat'].includes(src.estat) ? src.estat : 'confirmat';
+  return dates.map((d) => ({
+    id: uid(), titol: src.titol, programaId: src.programaId, data: d, hora: src.hora, durada: src.durada, estudi: src.estudi,
+    estat, presentadors: [...(src.presentadors || [])], tecnic: src.tecnic || '', notes: ambNotes ? src.notes || '' : '',
+    convidatsIds: [], convidats: '', checklist: {}, numero: '', emissio: '', horaEmissio: '', enllac: '',
+    serie: dates.length > 1 || src.serie ? src.serie || src.id : undefined,
+  }));
 }
 
 /* ---------- Diàleg genèric ---------- */
