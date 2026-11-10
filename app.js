@@ -35,7 +35,7 @@ const fromMin = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const estatNom = (id) => (ESTATS.find((e) => e[0] === id) || [id, id])[1];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const dataCurta = (ds) => { const d = parseYmd(ds); return `${DIES[(d.getDay() + 6) % 7]} ${d.getDate()} ${MESOS[d.getMonth()].slice(0, 3)}. ${d.getFullYear()}`; };
+const dataCurta = (ds) => { if (!ds) return '—'; const d = parseYmd(ds); return `${DIES[(d.getDay() + 6) % 7]} ${d.getDate()} ${MESOS[d.getMonth()].slice(0, 3)}. ${d.getFullYear()}`; };
 const dataLlarga = (ds) => { const d = parseYmd(ds); return `${DIES_LLARGS[(d.getDay() + 6) % 7]} ${d.getDate()} de ${MESOS[d.getMonth()]}`; };
 const inicials = (nom) => nom.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
 
@@ -96,8 +96,16 @@ const color = (g) => prog(g.programaId)?.color || '#868E96';
 const progNom = (g) => prog(g.programaId)?.nom || 'Sense programa';
 const visibles = () => state.gravacions.filter((g) => !ui.filtrePrograma || g.programaId === ui.filtrePrograma);
 const delDia = (ds) => visibles().filter((g) => g.data === ds).sort((a, b) => toMin(a.hora) - toMin(b.hora));
-const ordena = (a, b) => (a.data + a.hora).localeCompare(b.data + b.hora);
-const horari = (g) => `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}`;
+// Emissions del dia (data d'emissió), separades de les gravacions
+const emDia = (ds) => visibles().filter((g) => g.emissio === ds && g.estat !== 'cancellat').sort((a, b) => toMin(a.horaEmissio) - toMin(b.horaEmissio));
+// Data de referència: la de gravació; si encara no en té, la d'emissió
+const dataRef = (g) => g.data || g.emissio || '';
+const ordena = (a, b) => (dataRef(a) + (a.data ? a.hora : a.horaEmissio || '')).localeCompare(dataRef(b) + (b.data ? b.hora : b.horaEmissio || ''));
+const horari = (g) => (g.data && g.hora ? `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}` : 'Sense data de gravació');
+const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
+const emissioText = (g) => (g.emissio ? `📻 Emissió: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
+const GRAVADA = ['gravat', 'editat', 'publicat'];
+const jaGravada = (g, avui = ymd(new Date())) => GRAVADA.includes(g.estat) || Boolean(g.data && g.data <= avui);
 const equip = (g) => [...(g.presentadors || []).map(pers), pers(g.tecnic)].filter(Boolean).map((p) => p.nom);
 // Les persones poden ser de l'equip o convidats (tipus: 'convidat')
 const equipPers = () => state.persones.filter((p) => p.tipus !== 'convidat');
@@ -134,18 +142,35 @@ function render() {
 /* ---------- Calendari ---------- */
 function chip(g) {
   return `<button class="chip ${g.estat === 'cancellat' ? 'cancel' : ''}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}"
-    title="${esc(`${horari(g)} · ${progNom(g)} · ${g.titol} · ${estatNom(g.estat)}`)}"><span class="t">${esc(g.hora)}</span> ${esc(g.titol)}</button>`;
+    title="${esc(`🎙️ Gravació ${horari(g)} · ${progNom(g)} · ${titolG(g)} · ${estatNom(g.estat)}`)}"><span class="t">🎙️ ${esc(g.hora)}</span> ${esc(g.titol)}</button>`;
+}
+function chipEmissio(g) {
+  return `<button class="chip emissio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}"
+    title="${esc(`📻 Emissió ${g.horaEmissio || ''} · ${progNom(g)} · ${titolG(g)} · ${estatNom(g.estat)}`)}"><span class="t">📻 ${esc(g.numero ? 'Ep.' + g.numero : g.horaEmissio || '')}</span> ${esc(g.titol)}</button>`;
 }
 function card(g) {
   const noms = equip(g);
   return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
-      <div class="h">${horari(g)}${g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
-      <div class="ti">${esc(g.titol)}</div>
+      <div class="h">${g.data ? '🎙️ ' : ''}${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
+      <div class="ti">${esc(titolG(g))}</div>
       <div class="pr">${esc(progNom(g))}</div>
+      ${g.emissio ? `<div class="pr">${esc(emissioText(g))}</div>` : ''}
       <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span>${g.estat !== 'cancellat' ? checkBadge(g) : ''}${noms.length ? `<span class="hint">${esc(noms.join(', '))}</span>` : ''}</div>
       ${nomsConvidats(g).length ? `<div class="pr">Convidats: ${esc(nomsConvidats(g).join(', '))}</div>` : ''}
+    </div>
+  </button>`;
+}
+// Targeta d'emissió (el dia que surt a antena)
+function cardEmissio(g) {
+  return `<button class="card emissio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
+    ${coverProg(prog(g.programaId))}
+    <div class="body">
+      <div class="h">📻 Emissió${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}</div>
+      <div class="ti">${esc(titolG(g))}</div>
+      <div class="pr">${esc(progNom(g))}</div>
+      <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span></div>
     </div>
   </button>`;
 }
@@ -163,19 +188,20 @@ function renderCal(m) {
     const weeks = Math.ceil((((first.getDay() + 6) % 7) + dim) / 7);
     let cells = '';
     for (let i = 0; i < weeks * 7; i++) {
-      const d = addDays(start, i), ds = ymd(d), items = delDia(ds);
+      const d = addDays(start, i), ds = ymd(d), items = delDia(ds), ems = emDia(ds);
+      const tots = [...items.map(chip), ...ems.map(chipEmissio)];
       cells += `<div class="cell ${d.getMonth() !== c.getMonth() ? 'out' : ''} ${ds === avui ? 'today' : ''} ${ds === ui.diaSel ? 'sel' : ''}" data-action="dia" data-date="${ds}">
         <div class="num">${d.getDate()}</div>
-        ${items.slice(0, 3).map(chip).join('')}
-        ${items.length > 3 ? `<button class="more" data-action="veure-setmana" data-date="${ds}">+${items.length - 3} més</button>` : ''}
-        <div class="dots">${items.slice(0, 4).map((g) => `<i style="--c:${color(g)}"></i>`).join('')}</div>
+        ${tots.slice(0, 3).join('')}
+        ${tots.length > 3 ? `<button class="more" data-action="veure-setmana" data-date="${ds}">+${tots.length - 3} més</button>` : ''}
+        <div class="dots">${items.slice(0, 4).map((g) => `<i style="--c:${color(g)}"></i>`).join('')}${ems.slice(0, 2).map((g) => `<i class="em" style="--c:${color(g)}"></i>`).join('')}</div>
       </div>`;
     }
-    const sel = delDia(ui.diaSel);
+    const sel = delDia(ui.diaSel), selEm = emDia(ui.diaSel);
     body = `<div class="month"><div class="dow">${DIES.map((d) => `<div>${d}</div>`).join('')}</div><div class="grid">${cells}</div></div>
       <div class="dia-sel dia-grup">
         <h3 class="${ui.diaSel === avui ? 'avui' : ''}">${ui.diaSel === avui ? 'Avui · ' : ''}${dataLlarga(ui.diaSel)}</h3>
-        ${sel.map(card).join('') || '<p class="empty">Cap gravació aquest dia.</p>'}
+        ${sel.map(card).join('') + selEm.map(cardEmissio).join('') || '<p class="empty">Cap gravació aquest dia.</p>'}
         <button class="add" style="width:100%" data-action="nova-dia" data-date="${ui.diaSel}">+ Afegir gravació</button>
       </div>`;
   } else {
@@ -185,13 +211,14 @@ function renderCal(m) {
       const d = addDays(s, i), ds = ymd(d), items = delDia(ds);
       return `<section class="wday ${ds === avui ? 'today' : ''}">
         <header data-action="nova-dia" data-date="${ds}"><span>${DIES_LLARGS[i]}</span><b>${d.getDate()}</b></header>
-        ${items.map(card).join('') || '<p class="empty">Cap gravació</p>'}
+        ${items.map(card).join('') + emDia(ds).map(cardEmissio).join('') || '<p class="empty">Cap gravació</p>'}
         <button class="add" data-action="nova-dia" data-date="${ds}">+ Afegir</button>
       </section>`;
     }).join('') + '</div>';
   }
 
-  const legend = state.programes.map((p) => `<span><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</span>`).join('');
+  const legend = state.programes.map((p) => `<span><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</span>`).join('')
+    + '<span>🎙️ Gravació</span><span>📻 Emissió</span>';
   m.innerHTML = `
     <div class="toolbar">
       <div class="grp">
@@ -231,8 +258,8 @@ function renderTaula() {
   const q = ui.cerca.trim().toLowerCase();
   const rows = visibles()
     .filter((g) => !ui.filtreEstat || g.estat === ui.filtreEstat)
-    .filter((g) => !ui.nomesProperes || g.data >= avui)
-    .filter((g) => !q || [g.titol, ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
+    .filter((g) => !ui.nomesProperes || (g.data || '') >= avui || (g.emissio || '') >= avui)
+    .filter((g) => !q || [titolG(g), ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
     .sort(ordena);
   const t = $('#taula');
   if (!rows.length) {
@@ -242,12 +269,13 @@ function renderTaula() {
   }
   // Ordinador: taula
   const taula = `<div class="panel agenda-taula"><table>
-    <thead><tr><th>Data</th><th>Horari</th><th>Programa</th><th>Títol</th><th>Estudi</th><th>Equip</th><th>Convidats</th><th>Feina</th><th>Estat</th><th></th></tr></thead>
+    <thead><tr><th>Gravació</th><th>Horari</th><th>Emissió</th><th>Programa</th><th>Títol</th><th>Estudi</th><th>Equip</th><th>Convidats</th><th>Feina</th><th>Estat</th><th></th></tr></thead>
     <tbody>${rows.map((g) => `<tr class="${g.estat === 'cancellat' ? 'cancel' : ''}">
       <td class="nowrap">${dataCurta(g.data)}</td>
-      <td class="nowrap">${horari(g)}</td>
+      <td class="nowrap">${g.data ? horari(g) : '—'}</td>
+      <td class="nowrap">${g.emissio ? `${dataCurta(g.emissio)}${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}` : '—'}</td>
       <td><div class="prog">${coverProg(prog(g.programaId))}${esc(progNom(g))}</div></td>
-      <td>${esc(g.titol)}</td>
+      <td>${esc(titolG(g))}${g.enllac ? ` <a href="${esc(g.enllac)}" target="_blank" rel="noopener" title="Notícia publicada">📰</a>` : ''}</td>
       <td class="nowrap">${esc(g.estudi || '—')}</td>
       <td>${esc(equip(g).join(', ') || '—')}</td>
       <td>${esc(nomsConvidats(g).join(', ') || '—')}</td>
@@ -257,9 +285,9 @@ function renderTaula() {
     </tr>`).join('')}</tbody></table></div>`;
   // Mòbil: targetes agrupades per dia
   const grups = {};
-  rows.forEach((g) => { (grups[g.data] = grups[g.data] || []).push(g); });
+  rows.forEach((g) => { const k = dataRef(g); (grups[k] = grups[k] || []).push(g); });
   const targetes = `<div class="agenda-cards">${Object.entries(grups).map(([ds, gs]) => `
-    <div class="dia-grup"><h3 class="${ds === avui ? 'avui' : ''}">${ds === avui ? 'Avui · ' : ''}${dataLlarga(ds)}</h3>${gs.map(card).join('')}</div>`).join('')}</div>`;
+    <div class="dia-grup"><h3 class="${ds === avui ? 'avui' : ''}">${!ds ? 'Sense data' : (ds === avui ? 'Avui · ' : '') + dataLlarga(ds)}</h3>${gs.map(card).join('')}</div>`).join('')}</div>`;
   t.innerHTML = taula + targetes;
 }
 
@@ -276,7 +304,7 @@ function renderProgrames(m) {
         <div class="img">${p.imatge ? `<img src="${esc(p.imatge)}" alt="">` : `<span>${esc(inicials(p.nom))}</span>`}</div>
         <div class="in">
           <h3>${esc(p.nom)}</h3>
-          <div class="sub"><span class="dot" style="--c:${p.color}"></span>${p.tipus === 'podcast' ? 'Podcast' : 'Programa'} · ${gs.length} gravacions</div>
+          <div class="sub"><span class="dot" style="--c:${p.color}"></span>${p.tipus === 'podcast' ? 'Podcast' : 'Programa'} · ${gs.length} episodis</div>
           <div class="sub">${properes.length ? `Propera: ${dataCurta(properes[0].data)}, ${properes[0].hora}` : 'Cap gravació programada'}</div>
           <div class="acts"><button class="btn small" data-action="edita-programa" data-id="${p.id}">Edita</button>
             <button class="btn small" data-action="filtra-programa" data-id="${p.id}">Calendari</button></div>
@@ -287,16 +315,15 @@ function renderProgrames(m) {
 }
 
 /* ---------- Estadístiques ---------- */
-const GRAVADA = ['gravat', 'editat', 'publicat'];
 function estadistiques() {
-  const anys = [...new Set([new Date().getFullYear(), ...state.gravacions.map((g) => Number(g.data.slice(0, 4)))])].sort((a, b) => b - a);
+  const anys = [...new Set([new Date().getFullYear(), ...state.gravacions.filter(dataRef).map((g) => Number(dataRef(g).slice(0, 4)))])].sort((a, b) => b - a);
   const any = ui.anyStats || new Date().getFullYear();
-  const del = state.gravacions.filter((g) => g.data.startsWith(String(any)));
+  const del = state.gravacions.filter((g) => dataRef(g).startsWith(String(any)));
   const gravades = del.filter((g) => GRAVADA.includes(g.estat));
   const publicades = del.filter((g) => g.estat === 'publicat');
   const perPublicar = state.gravacions.filter((g) => g.estat === 'gravat' || g.estat === 'editat');
   const progs = [...state.programes, ...(del.some((g) => !prog(g.programaId)) ? [{ id: '', nom: 'Sense programa', color: '#868E96' }] : [])];
-  const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && Number(g.data.slice(5, 7)) === mes).length;
+  const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && Number(dataRef(g).slice(5, 7)) === mes).length;
   const max = Math.max(1, ...progs.flatMap((p) => [...Array(12)].map((_, i) => compta(gravades, p.id, i + 1))));
 
   const files = [...Array(12)].map((_, i) => {
@@ -323,7 +350,7 @@ function estadistiques() {
     <div class="panel"><table class="taula-stats">
       <thead><tr><th>Mes</th>${progs.map((p) => `<th><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</th>`).join('')}</tr></thead>
       <tbody>${files}${totals}</tbody></table></div>
-    <p class="hint" style="margin-top:8px">«Gravats» compta els episodis en estat Gravat, Editat o Publicat. «Publicats», només els Publicats.</p>
+    <p class="hint" style="margin-top:8px">«Gravats» compta els episodis en estat Gravat, Editat o Publicat. «Publicats», només els Publicats. Si un episodi no té data de gravació, es compta pel mes d'emissió.</p>
   </div>`;
 }
 
@@ -421,23 +448,30 @@ function renderPersones(m) {
 
     <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Convidats</h2></div>
       <button class="btn primary" data-action="nou-convidat">+ Nou convidat</button></div>
-    ${conv.length > 6 ? `<div class="toolbar"><input type="search" id="cercaConv" placeholder="Cerca convidat…" value="${esc(ui.cercaConv || '')}" style="max-width:320px"></div>` : ''}
+    ${conv.length > 6 ? `<div class="toolbar"><div class="grp" style="width:auto">
+      <input type="search" id="cercaConv" placeholder="Cerca convidat…" value="${esc(ui.cercaConv || '')}" style="max-width:320px">
+      <select id="filtreConv" aria-label="Filtra convidats" style="width:auto">${[['', 'Tots'], ['vingut', 'Ja han vingut'], ['propers', 'Amb gravació pendent'], ['potencials', 'Potencials']]
+        .map(([v, n]) => `<option value="${v}" ${(ui.filtreConv || '') === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>` : ''}
     <div class="cards equip" id="llistaConv">${llistaConvidats()}</div>`;
 }
 function llistaConvidats() {
   const q = (ui.cercaConv || '').trim().toLowerCase();
-  const conv = convidatsPers().filter((p) => !q || [p.nom, p.notes, p.email].join(' ').toLowerCase().includes(q));
-  return conv.map((p) => {
-    const avui = ymd(new Date());
-    const h = historial(p);
-    const vingut = h.filter((g) => g.data <= avui);
-    const propera = h.filter((g) => g.data > avui).pop();
+  const avui = ymd(new Date());
+  const f = ui.filtreConv || '';
+  const conv = convidatsPers()
+    .filter((p) => !q || [p.nom, p.notes, p.email].join(' ').toLowerCase().includes(q))
+    .map((p) => {
+      const h = historial(p);
+      return { p, vingut: h.filter((g) => jaGravada(g, avui)), propera: h.filter((g) => !jaGravada(g, avui)).pop() };
+    })
+    .filter(({ p, vingut, propera }) => !f || (f === 'vingut' && vingut.length) || (f === 'propers' && propera) || (f === 'potencials' && p.potencial));
+  return conv.map(({ p, vingut, propera }) => {
     return `<div class="item persona">
       <div class="avatar conv">${esc(inicials(p.nom))}</div>
       <div class="in">
-        <h3>${esc(p.nom)}</h3>
-        <div class="sub">${vingut.length ? `Ha vingut ${vingut.length} ${vingut.length === 1 ? 'vegada' : 'vegades'} · última: ${dataCurta(vingut[0].data)} (${esc(progNom(vingut[0]))})` : 'Encara no ha vingut'}</div>
-        ${propera ? `<div class="sub">Propera: <b>${dataCurta(propera.data)}</b> (${esc(progNom(propera))})</div>` : ''}
+        <h3>${esc(p.nom)}${p.potencial ? ' <span class="badge potencial">Potencial</span>' : ''}</h3>
+        <div class="sub">${vingut.length ? `Ha vingut ${vingut.length} ${vingut.length === 1 ? 'vegada' : 'vegades'} · ${esc(titolG(vingut[0]))} (${esc(progNom(vingut[0]))})` : 'Encara no ha vingut'}</div>
+        ${propera ? `<div class="sub">Propera: <b>${propera.data ? 'gravació ' + dataCurta(propera.data) : (propera.emissio ? 'emissió ' + dataCurta(propera.emissio) : 'sense data')}</b> (${esc(titolG(propera))})</div>` : ''}
         <div class="sub contacte">
           ${p.telefon ? `<a href="tel:${esc(p.telefon.replace(/\s+/g, ''))}">📞 ${esc(p.telefon)}</a>` : ''}
           ${p.email ? `<a href="mailto:${esc(p.email)}">✉️ ${esc(p.email)}</a>` : ''}
@@ -445,7 +479,7 @@ function llistaConvidats() {
       </div>
       <button class="btn small" data-action="edita-persona" data-id="${p.id}">Fitxa</button>
     </div>`;
-  }).join('') || `<p class="empty">${q ? 'Cap convidat coincideix amb la cerca.' : 'Encara no hi ha cap convidat. Els pots crear aquí o directament des d\'una gravació.'}</p>`;
+  }).join('') || `<p class="empty">${q || f ? 'Cap convidat coincideix amb la cerca.' : 'Encara no hi ha cap convidat. Els pots crear aquí o directament des d\'una gravació.'}</p>`;
 }
 
 function openPersona(p, tipus) {
@@ -464,16 +498,17 @@ function openPersona(p, tipus) {
         <label>Correu <input type="email" name="email" value="${esc(p.email)}" placeholder="nom@exemple.com"></label>
       </div>
       <label>Notes <textarea name="notes" rows="3" placeholder="Temes, com el vam conèixer, preferències…">${esc(p.notes)}</textarea></label>
+      <label class="check"><input type="checkbox" name="potencial" ${p.potencial ? 'checked' : ''}> Convidat potencial (encara per confirmar)</label>
       ${nou ? '' : `<fieldset><legend>Historial (${h.length})</legend>
         ${h.length ? `<ul class="historial">${h.map((g) => `<li><button type="button" data-dlg="obre-grav" data-id="${g.id}">
-          <span class="dot" style="--c:${color(g)}"></span><b>${dataCurta(g.data)}</b> · ${esc(progNom(g))} · ${esc(g.titol)} <span class="badge ${g.estat}">${estatNom(g.estat)}</span></button></li>`).join('')}</ul>`
+          <span class="dot" style="--c:${color(g)}"></span><b>${g.data ? '🎙️ ' + dataCurta(g.data) : '📻 ' + dataCurta(g.emissio)}</b> · ${esc(progNom(g))} · ${esc(titolG(g))} <span class="badge ${g.estat}">${estatNom(g.estat)}</span></button></li>`).join('')}</ul>`
           : '<span class="hint">Encara no ha participat en cap gravació.</span>'}
       </fieldset>`}`
     : `<label>Rol <input name="rol" value="${esc(p.rol)}" placeholder="Presentació, tècnica de so, producció…"></label>`}`, {
     onSave(f) {
       const nom = f.get('nom').trim();
       if (!nom) { toast('Cal posar un nom.'); return false; }
-      if (esConv) Object.assign(p, { nom, telefon: f.get('telefon').trim(), email: f.get('email').trim(), notes: f.get('notes').trim() });
+      if (esConv) Object.assign(p, { nom, telefon: f.get('telefon').trim(), email: f.get('email').trim(), notes: f.get('notes').trim(), potencial: f.get('potencial') === 'on' });
       else Object.assign(p, { nom, rol: f.get('rol').trim() });
       if (nou) state.persones.push(p);
       if (esConv) state.gravacions.forEach((g) => {   // manté al dia el text de convidats (per al calendari)
@@ -576,6 +611,7 @@ function exporta() {
 
 /* ---------- Gravació (formulari) ---------- */
 function conflictes(g) {
+  if (!g.data || !g.hora) return [];
   const ini = toMin(g.hora), fi = ini + Number(g.durada || 0);
   const gent = new Set([...(g.presentadors || []), g.tecnic].filter(Boolean));
   return state.gravacions.filter((o) => {
@@ -598,14 +634,28 @@ function openGravacio(g, dataPerDefecte) {
   const estudis = [...new Set([...state.estudis, g.estudi].filter(Boolean))];
   openDialog(`
     <h3>${nou ? 'Nova gravació' : 'Edita gravació'}</h3>
-    <label>Títol o episodi <input name="titol" value="${esc(g.titol)}" required placeholder="Ex.: Episodi 12 – Entrevista"></label>
-    <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
     <div class="row">
-      <label>Data <input type="date" name="data" value="${esc(g.data)}" required></label>
-      <label>Hora d'inici <input type="time" name="hora" value="${esc(g.hora)}" required></label>
-      <label>Durada (min) <input type="number" inputmode="numeric" name="durada" min="5" step="5" value="${esc(g.durada)}"></label>
-      <label>Estat <select name="estat">${estatOptions(g.estat)}</select></label>
+      <label style="flex:3">Títol o convidat <input name="titol" value="${esc(g.titol)}" required placeholder="Ex.: Entrevista a…"></label>
+      <label style="flex:1">Núm. episodi <input type="number" inputmode="numeric" name="numero" min="0" value="${esc(g.numero ?? '')}"></label>
     </div>
+    <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
+    <fieldset><legend>🎙️ Gravació</legend>
+      <div class="row">
+        <label>Data <input type="date" name="data" value="${esc(g.data)}"></label>
+        <label>Hora d'inici <input type="time" name="hora" value="${esc(g.hora || '10:00')}"></label>
+        <label>Durada (min) <input type="number" inputmode="numeric" name="durada" min="5" step="5" value="${esc(g.durada)}"></label>
+        <label>Estat <select name="estat">${estatOptions(g.estat)}</select></label>
+      </div>
+      <span class="hint">Si encara no saps quan es gravarà, deixa la data buida.</span>
+    </fieldset>
+    <fieldset><legend>📻 Emissió</legend>
+      <div class="row">
+        <label>Data d'emissió <input type="date" name="emissio" value="${esc(g.emissio || '')}"></label>
+        <label>Hora <input type="time" name="horaEmissio" value="${esc(g.horaEmissio || '')}"></label>
+      </div>
+      <label>Notícia publicada <input type="url" name="enllac" value="${esc(g.enllac || '')}" placeholder="https://…"></label>
+      ${g.enllac ? `<a class="hint" href="${esc(g.enllac)}" target="_blank" rel="noopener">📰 Obre la notícia</a>` : ''}
+    </fieldset>
     <label>Estudi <select name="estudi"><option value="">— Cap / fora d'estudi —</option>${estudis.map((s) => `<option ${s === g.estudi ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
     <fieldset><legend>Presenten / participen</legend>
       ${equipPers().length ? `<div class="checks">${equipPers().map((p) => `<label><input type="checkbox" name="presentadors" value="${p.id}" ${(g.presentadors || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>`
@@ -613,9 +663,11 @@ function openGravacio(g, dataPerDefecte) {
     </fieldset>
     <label>Tècnic/a <select name="tecnic"><option value="">—</option>${equipPers().map((p) => `<option value="${p.id}" ${p.id === g.tecnic ? 'selected' : ''}>${esc(p.nom)}${p.rol ? ' · ' + esc(p.rol) : ''}</option>`).join('')}</select></label>
     <fieldset><legend>Convidats</legend>
-      ${convidatsPers().length ? `<div class="checks">${convidatsPers().map((p) => `<label><input type="checkbox" name="convidatsIds" value="${p.id}" ${(g.convidatsIds || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>` : ''}
-      <label style="margin-top:8px">Convidats nous
-        <input name="convidatsNous" value="${esc((g.convidatsIds || []).length ? '' : (g.convidats || ''))}" placeholder="Noms separats per comes (se'ls crearà la fitxa)"></label>
+      ${(g.convidatsIds || []).map(pers).filter(Boolean).length ? `<div class="checks">${(g.convidatsIds || []).map(pers).filter(Boolean).map((p) => `<label><input type="checkbox" name="convidatsIds" value="${p.id}" checked> ${esc(p.nom)}</label>`).join('')}</div>` : ''}
+      <label style="margin-top:8px">Afegeix convidats
+        <input name="convidatsNous" list="llistaNomsConv" value="${esc((g.convidatsIds || []).length ? '' : (g.convidats || ''))}" placeholder="Escriu el nom (si ja té fitxa, s'hi enllaça)"></label>
+      <datalist id="llistaNomsConv">${convidatsPers().map((p) => `<option value="${esc(p.nom)}">`).join('')}</datalist>
+      <span class="hint">Per treure'n un, desmarca'l. Diversos noms, separats per comes.</span>
     </fieldset>
     <fieldset><legend>Checklist de l'episodi</legend>
       <div class="checks">${CHECKLIST.map(([k, nom]) => `<label><input type="checkbox" name="checklist" value="${k}" ${g.checklist?.[k] ? 'checked' : ''}> ${nom}</label>`).join('')}</div>
@@ -626,14 +678,17 @@ function openGravacio(g, dataPerDefecte) {
     extraButtons: nou ? '' : '<button type="button" class="btn" data-dlg="duplica">Duplica</button>',
     onSave(f) {
       const dades = {
-        titol: f.get('titol').trim(), programaId: f.get('programaId'), data: f.get('data'), hora: f.get('hora'),
+        titol: f.get('titol').trim(), programaId: f.get('programaId'), data: f.get('data'), hora: f.get('hora') || '10:00',
+        numero: f.get('numero') === '' ? '' : Number(f.get('numero')),
+        emissio: f.get('emissio'), horaEmissio: f.get('horaEmissio'), enllac: f.get('enllac').trim(),
         durada: Math.max(5, Number(f.get('durada')) || 60), estudi: f.get('estudi'), estat: f.get('estat'),
         presentadors: f.getAll('presentadors'), tecnic: f.get('tecnic'),
         notes: f.get('notes').trim(),
         checklist: Object.fromEntries(f.getAll('checklist').map((k) => [k, true])),
       };
-      if (!dades.titol || !dades.data || !dades.hora) { toast("Cal omplir el títol, la data i l'hora."); return false; }
-      const reps = nou ? Math.min(52, Math.max(0, Number(f.get('repeticions')) || 0)) : 0;
+      if (!dades.titol) { toast('Cal posar un títol.'); return false; }
+      if (!dades.data && !dades.emissio) { toast("Cal posar la data de gravació o la d'emissió."); return false; }
+      const reps = nou && dades.data ? Math.min(52, Math.max(0, Number(f.get('repeticions')) || 0)) : 0;
       const xocsPrevis = [{ ...g, ...dades }];
       for (let i = 1; i <= reps; i++) xocsPrevis.push({ ...g, ...dades, id: 'x' + i, data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
       const xocs = xocsPrevis.flatMap(conflictes);
@@ -649,12 +704,14 @@ function openGravacio(g, dataPerDefecte) {
         if (!ids.includes(p.id)) ids.push(p.id);
       });
       dades.convidatsIds = ids;
+      // Un convidat potencial deixa de ser-ho quan la gravació ja està confirmada
+      if (dades.estat !== 'pendent' && dades.estat !== 'cancellat') ids.map(pers).forEach((p) => { if (p?.potencial) p.potencial = false; });
       dades.convidats = ids.map(pers).filter(Boolean).map((p) => p.nom).join(', ');   // text per al calendari del iPhone
       const noves = [{ ...g, ...dades }];
-      for (let i = 1; i <= reps; i++) noves.push({ ...g, ...dades, checklist: {}, id: uid(), data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
+      for (let i = 1; i <= reps; i++) noves.push({ ...g, ...dades, checklist: {}, emissio: '', numero: '', enllac: '', id: uid(), data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
       if (nou) state.gravacions.push(...noves);
       else Object.assign(g, dades);
-      ui.diaSel = dades.data;
+      ui.diaSel = dataRef(dades);
       toast(reps ? `S'han creat ${noves.length} gravacions.` : 'Gravació desada.');
     },
     onDelete: nou ? null : () => {
@@ -666,9 +723,9 @@ function openGravacio(g, dataPerDefecte) {
         closeDialog();
         openGravacio(null, g.data);
         const f = $('#dlgForm');
-        ['titol', 'programaId', 'hora', 'durada', 'estudi', 'tecnic', 'notes'].forEach((k) => { f.elements[k].value = g[k] ?? ''; });
+        ['titol', 'programaId', 'hora', 'durada', 'estudi', 'tecnic', 'notes', 'horaEmissio'].forEach((k) => { f.elements[k].value = g[k] ?? ''; });
         f.querySelectorAll('input[name=presentadors]').forEach((c) => { c.checked = (g.presentadors || []).includes(c.value); });
-        f.querySelectorAll('input[name=convidatsIds]').forEach((c) => { c.checked = (g.convidatsIds || []).includes(c.value); });
+        f.elements.convidatsNous.value = nomsConvidats(g).join(', ');
         f.elements.titol.value = g.titol + ' (còpia)';
         f.dispatchEvent(new Event('change'));
       }
@@ -805,7 +862,9 @@ $('#main').addEventListener('change', (e) => {
 });
 $('#main').addEventListener('input', (e) => {
   if (e.target.id === 'cerca') { ui.cerca = e.target.value; renderTaula(); }
-  if (e.target.id === 'cercaConv') { ui.cercaConv = e.target.value; $('#llistaConv').innerHTML = llistaConvidats(); }
+  if (e.target.id === 'cercaConv' || e.target.id === 'filtreConv') {
+    ui[e.target.id] = e.target.value; $('#llistaConv').innerHTML = llistaConvidats();
+  }
 });
 mobil.addEventListener('change', render);
 

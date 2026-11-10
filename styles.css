@@ -392,3 +392,9 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   .row { grid-template-columns: 1fr 1fr; }
   dialog { width: 100vw; max-width: 100vw; max-height: 92dvh; margin: auto 0 0; border-radius: 20px 20px 0 0; }
 }
+
+/* ---------- Emissions i convidats potencials ---------- */
+.chip.emissio { background: transparent; border: 1px dashed var(--c); border-left: 3px dashed var(--c); }
+.card.emissio { border-style: dashed; border-left-style: solid; background: transparent; }
+.dots i.em { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c); }
+.badge.potencial { background: transparent; border: 1px dashed var(--muted); color: var(--muted); vertical-align: middle; margin-left: 4px; }
