@@ -1041,7 +1041,7 @@ function openGravacio(g, dataPerDefecte) {
       f.elements.finsA.disabled = !tipus;
       const dates = base ? datesRepeticio(base, tipus, f.elements.finsA.value) : [];
       $('#resumRep').textContent = !tipus ? '' : !dates.length ? (tipus === 'un' ? 'Tria el dia.' : 'Tria fins a quin dia.')
-        : `${nou ? 'A més d\'aquesta, es crearan' : 'Es crearan'} ${dates.length} ${dates.length === 1 ? 'sessió' : 'sessions'}: ${dates.slice(0, 4).map(dataCurta).join(', ')}${dates.length > 4 ? ` … fins al ${dataCurta(dates.at(-1))}` : ''}.`;
+        : `${nou ? 'A més d\'aquesta, es ' : 'Es '}${dates.length === 1 ? 'crearà' : 'crearan'} ${dates.length} ${dates.length === 1 ? 'sessió' : 'sessions'}: ${dates.slice(0, 4).map(dataCurta).join(', ')}${dates.length > 4 ? ` … fins al ${dataCurta(dates.at(-1))}` : ''}.`;
     }
   };
   f.oninput = comprova;
