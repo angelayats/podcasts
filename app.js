@@ -923,6 +923,15 @@ function openGravacio(g, dataPerDefecte) {
       <label>Notícia publicada <input type="url" name="enllac" value="${esc(g.enllac || '')}" placeholder="https://…"></label>
       ${g.enllac ? `<a class="hint" href="${esc(g.enllac)}" target="_blank" rel="noopener">📰 Obre la notícia</a>` : ''}
     </fieldset>
+    ${nou ? '' : `<fieldset><legend>🎧 Escolta</legend>
+      <div class="grp" style="width:auto">
+        <button type="button" class="btn small" data-dlg="escolta">▶ Escolta des d'Arxius</button>
+        <a class="btn small" href="bookplayer://">🎧 Obre Book Player</a>
+        <input type="file" id="fitxerAudio" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav" hidden>
+      </div>
+      <div id="reproductor"></div>
+      <span class="hint">Tria el fitxer de la carpeta del programa o de la de BookPlayer (Arxius → Al meu iPhone → BookPlayer). Només s'escolta: no es puja enlloc.</span>
+    </fieldset>`}
     <label>Estudi <select name="estudi"><option value="">— Cap / fora d'estudi —</option>${estudis.map((s) => `<option ${s === g.estudi ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
     <fieldset><legend>Presenten / participen</legend>
       ${equipPers().length ? `<div class="checks">${equipPers().map((p) => `<label><input type="checkbox" name="presentadors" value="${p.id}" ${(g.presentadors || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>`
@@ -987,6 +996,7 @@ function openGravacio(g, dataPerDefecte) {
       state.gravacions = state.gravacions.filter((x) => x.id !== g.id);
     },
     onExtra(action) {
+      if (action === 'escolta') $('#fitxerAudio').click();
       if (action === 'duplica') {
         closeDialog();
         openGravacio(null, g.data);
@@ -1033,6 +1043,24 @@ function openDialog(html, h) {
   f.scrollTop = 0; dlg.scrollTop = 0;
 }
 function closeDialog() { const d = $('#dlg'); if (d.open) d.close(); }
+
+/* ---------- Escoltar un àudio del iPhone (no es puja enlloc) ---------- */
+let urlAudio = '';
+function aturaAudio() {
+  document.querySelectorAll('#dlg audio').forEach((a) => a.pause());
+  if (urlAudio) { URL.revokeObjectURL(urlAudio); urlAudio = ''; }
+}
+$('#dlg').addEventListener('close', aturaAudio);
+$('#dlgForm').addEventListener('change', (e) => {
+  if (e.target.id !== 'fitxerAudio') return;
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  aturaAudio();
+  urlAudio = URL.createObjectURL(file);
+  $('#reproductor').innerHTML = `<p class="hint" style="margin:8px 0 4px">🎧 ${esc(file.name)}</p>
+    <audio controls autoplay preload="metadata" src="${urlAudio}" style="width:100%"></audio>`;
+});
 
 $('#dlgForm').addEventListener('submit', (e) => {
   e.preventDefault();
