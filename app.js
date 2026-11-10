@@ -397,6 +397,17 @@ function renderConfig(m) {
         <input type="file" id="fitxer" accept=".json,application/json" hidden>
       </div>
     </div>
+    ${(() => {
+      const cal = typeof Sync !== 'undefined' ? Sync.enllacCalendari() : '';
+      return cal ? `<div class="section">
+        <h2>Calendari del iPhone</h2>
+        <p class="help">Les gravacions apareixen soles al Calendari del iPhone, amb un avís 30 minuts abans. Les cancel·lades no hi surten.<br>
+        <b>Al iPhone:</b> toca el botó, després <b>Subscriure's</b>. A la pantalla següent, posa-li color <b>verd</b> i desactiva <b>«Eliminar alertes»</b> perquè t'arribin els avisos. Finalment toca <b>Afegir</b>.</p>
+        <div class="grp">
+          <a class="btn primary" href="${esc(cal)}">Afegeix al Calendari</a>
+          <button class="btn" data-action="copia-cal" data-url="${esc(cal)}">Copia l'enllaç</button>
+        </div></div>` : '';
+    })()}
     <div class="section">
       <h2>Instal·lar l'app</h2>
       <p class="help"><b>iPhone:</b> obre-la amb Safari, toca <b>Compartir</b> i després <b>Afegeix a la pantalla d'inici</b>.<br>
@@ -618,6 +629,9 @@ $('#main').addEventListener('click', (e) => {
     case 'edita-persona': return openPersona(pers(id));
     case 'treu-estudi': state.estudis.splice(Number(el.dataset.i), 1); save(); break;
     case 'exporta': return exporta();
+    case 'copia-cal':
+      navigator.clipboard?.writeText(el.dataset.url).then(() => toast('Enllaç copiat.'), () => toast('No s\'ha pogut copiar.'));
+      return;
     case 'importa': return $('#fitxer').click();
     case 'esborra-tot':
       if (!confirm('Segur que vols esborrar TOTES les dades? Exporta-les abans si les vols conservar.')) return;

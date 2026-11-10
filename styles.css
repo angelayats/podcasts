@@ -119,6 +119,8 @@ main { padding: 22px 20px 40px; max-width: 1400px; margin: 0 auto; }
   padding: 8px 14px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px;
 }
 .btn:hover { background: var(--surface-2); }
+a.btn { text-decoration: none; color: inherit; display: inline-block; }
+a.btn.primary { color: var(--accent-text); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .btn.primary:hover { opacity: .88; }
 .btn.danger { color: var(--danger); }

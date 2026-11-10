@@ -283,7 +283,15 @@ const Sync = (() => {
     if (clau) programa(0); else posaEstat('sense-clau');
   }
 
+  // Enllaç per subscriure's al calendari des del iPhone (inclou la clau privada)
+  function enllacCalendari() {
+    if (!disponible || !clau || valida === false) return '';
+    const host = new URL(cfg.supabaseUrl).host;
+    return `webcal://${host}/functions/v1/calendari?clau=${encodeURIComponent(clau)}${PROVES ? '&entorn=proves' : ''}`;
+  }
+
   return {
+    enllacCalendari,
     canvi() { if (!aplicant && sb && valida !== false) { posaEstat('sync'); programa(); } },
     html, bind, inicia,
   };
