@@ -430,3 +430,24 @@ tr.nomes-emissio td { color: var(--muted); }
   .barra { min-width: 0; }
   .barra span { padding: 0 6px; }
 }
+
+/* ---------- Estadístiques que es despleguen ---------- */
+button.metric { text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.metric:hover { background: var(--surface-2); }
+.metric.on { box-shadow: inset 0 0 0 2px var(--accent); }
+button.barra { display: block; width: 100%; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.barra:disabled { cursor: default; }
+button.barra.on, .total-prog.on { box-shadow: inset 0 0 0 2px var(--c, var(--accent)); }
+.total-prog { border: 0; background: none; font: inherit; color: inherit; cursor: pointer; padding: 4px 6px; border-radius: 6px; text-align: left; }
+.total-prog:hover { background: var(--surface-2); }
+#cercaStats { width: 100%; max-width: 520px; }
+.llista-stats { margin-bottom: 16px; max-height: 70vh; overflow-y: auto; }
+.cap-llista { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.cap-llista b { font-family: var(--font-title); letter-spacing: .5px; text-transform: uppercase; }
+.cap-llista .btn { margin-left: auto; }
+.llista-stats h4 { margin: 0; padding: 10px 12px 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.fila { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: none; padding: 9px 12px; font: inherit; color: inherit; cursor: pointer; }
+.fila:hover { background: var(--surface-2); }
+.fila .det { flex-basis: 100%; font-size: 12px; color: var(--muted); padding-left: 18px; }
+.avatar.mini { width: 24px; height: 24px; font-size: 10px; flex: none; }
+.fila:has(.avatar) .det { padding-left: 32px; }
