@@ -548,14 +548,29 @@ function openPersona(p, tipus) {
     try {
       const llista = llegeixVcard(await file.text());
       if (!llista.length) { toast("Aquest fitxer no té cap contacte."); return; }
-      const nomActual = clauCerca($('#dlgForm').elements.nom.value);
-      omplePersona(llista.find((c) => nomActual && clauCerca(c.nom) === nomActual) || llista[0]);
+      const nomForm = $('#dlgForm').elements.nom.value.trim();
+      if (llista.length === 1) return omplePersona(llista[0]);
+      // Fitxer amb molts contactes (l'agenda sencera): es busca el del convidat pel nom
+      const c = cercaContacte(llista, nomForm);
+      if (c) omplePersona(c);
+      else toast(nomForm ? `No he trobat «${nomForm}» en aquest fitxer de contactes.` : 'Escriu primer el nom del convidat.');
     } catch (err) { toast("No s'ha pogut llegir el contacte."); }
   });
 }
 
 /* ---------- Contactes: omplir la fitxa del convidat ---------- */
 const clauCerca = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+
+// Busca un contacte pel nom: primer exacte; si no, el que contingui totes les paraules del nom
+function cercaContacte(llista, nom) {
+  const q = clauCerca(nom);
+  if (!q) return null;
+  const exacte = llista.find((c) => clauCerca(c.nom) === q);
+  if (exacte) return exacte;
+  const paraules = q.split(' ');
+  const parcials = llista.filter((c) => { const n = clauCerca(c.nom).split(' '); return paraules.every((p) => n.includes(p)); });
+  return parcials.length === 1 ? parcials[0] : null;
+}
 
 // Si el navegador deixa triar de l'agenda (Contact Picker), s'obre l'agenda; si no, es tria un fitxer .vcf
 async function triaContacte() {
