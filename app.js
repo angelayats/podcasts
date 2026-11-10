@@ -37,11 +37,12 @@ const inicials = (nom) => nom.split(/\s+/).filter(Boolean).slice(0, 2).map((p) =
 
 /* ---------- Dades ---------- */
 function seed() {
-  const angel = uid(), david = uid();
+  // Identificadors fixos: així els dispositius nous no dupliquen els podcasts en sincronitzar
+  const angel = 'pe-angel', david = 'pe-david';
   return {
     programes: [
-      { id: uid(), nom: 'La cara oculta de la lluna', tipus: 'podcast', color: '#3D4B6B', imatge: 'img/la-cara-oculta-de-la-lluna.jpg' },
-      { id: uid(), nom: 'Blanc & Negre', tipus: 'podcast', color: '#B08D57', imatge: 'img/blanc-i-negre.jpg' },
+      { id: 'p-lluna', nom: 'La cara oculta de la lluna', tipus: 'podcast', color: '#3D4B6B', imatge: 'img/la-cara-oculta-de-la-lluna.jpg' },
+      { id: 'p-blanc-negre', nom: 'Blanc & Negre', tipus: 'podcast', color: '#B08D57', imatge: 'img/blanc-i-negre.jpg' },
     ],
     persones: [
       { id: angel, nom: 'Angel Ayats', rol: 'Producció i realització' },
@@ -74,6 +75,7 @@ function load() {
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); }
   catch (e) { toast("No s'han pogut desar les dades. Exporta-les des d'Ajustos."); }
+  if (typeof Sync !== 'undefined') Sync.canvi();
 }
 
 let state = load();
@@ -379,6 +381,7 @@ function openPersona(p) {
 /* ---------- Ajustos ---------- */
 function renderConfig(m) {
   m.innerHTML = `
+    ${typeof Sync !== 'undefined' ? Sync.html() : ''}
     <div class="section">
       <h2>Estudis i sales</h2>
       <p class="help">Els espais on es grava. L'app avisa si dues gravacions coincideixen al mateix estudi.</p>
@@ -387,7 +390,7 @@ function renderConfig(m) {
     </div>
     <div class="section">
       <h2>Còpia de seguretat</h2>
-      <p class="help">De moment les dades es guarden en aquest dispositiu. Exporta-les de tant en tant, o per passar-les a un altre dispositiu.</p>
+      <p class="help">Descarrega una còpia de totes les dades en un fitxer, per guardar-la o per recuperar-la si cal.</p>
       <div class="grp">
         <button class="btn" data-action="exporta">⬇ Exporta</button>
         <button class="btn" data-action="importa">⬆ Importa</button>
@@ -406,6 +409,7 @@ function renderConfig(m) {
         <button class="btn" data-action="exemple">Restaura les dades inicials</button>
       </div>
     </div>`;
+  if (typeof Sync !== 'undefined') Sync.bind();
   $('#formEstudi').addEventListener('submit', (e) => {
     e.preventDefault();
     const v = new FormData(e.target).get('estudi').trim();

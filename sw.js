@@ -1,11 +1,13 @@
 // Service worker: permet obrir l'app sense connexió i instal·lar-la.
 // Quan canviïs fitxers de l'app, puja el número de VERSIO perquè els dispositius s'actualitzin.
-const VERSIO = 'podcasts-v2';
+const VERSIO = 'podcasts-v3';
 const FITXERS = [
-  './', 'index.html', 'styles.css', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'app.js', 'sync.js', 'config.js', 'manifest.webmanifest',
   'img/icona.svg', 'img/icona-180.png', 'img/icona-192.png', 'img/icona-512.png', 'img/favicon-32.png',
   'img/la-cara-oculta-de-la-lluna.jpg', 'img/blanc-i-negre.jpg',
 ];
+// Fitxers externs que també es guarden per funcionar sense connexió
+const EXTERNS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSIO).then((c) => c.addAll(FITXERS)).then(() => self.skipWaiting()));
@@ -20,17 +22,20 @@ self.addEventListener('activate', (e) => {
 });
 
 // Xarxa primer (per tenir sempre l'última versió); si no hi ha connexió, la còpia guardada.
+// Les peticions a la base de dades (Supabase) no es toquen mai.
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  const propi = url.origin === self.location.origin;
+  if (e.request.method !== 'GET' || !(propi || EXTERNS.includes(url.hostname))) return;
   e.respondWith(
     fetch(e.request)
       .then((resp) => {
-        if (resp.ok && (e.request.url.startsWith(self.location.origin) || e.request.url.includes('fonts.g'))) {
+        if (resp.ok || resp.type === 'opaque') {
           const copia = resp.clone();
           caches.open(VERSIO).then((c) => c.put(e.request, copia));
         }
         return resp;
       })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match('index.html'))),
+      .catch(() => caches.match(e.request).then((r) => r || (propi && e.request.mode === 'navigate' ? caches.match('index.html') : Response.error()))),
   );
 });
