@@ -49,7 +49,7 @@ const Sync = (() => {
   function mapa() {
     const m = {};
     COLS.forEach((c) => state[c].forEach((r) => { m[c + ':' + r.id] = estable(r); }));
-    m['config:estudis'] = estable({ llista: state.estudis });
+    m['config:estudis'] = estable({ llista: state.estudis, ubicacions: state.ubicacions || {} });
     return m;
   }
   function pendents() {
@@ -81,8 +81,9 @@ const Sync = (() => {
     if (col === 'config') {
       if (id !== 'estudis') return false;
       const nou = Array.isArray(dades.llista) ? dades.llista : [];
-      if (estable(nou) === estable(state.estudis)) return false;
-      state.estudis = nou; return true;
+      const ub = dades.ubicacions && typeof dades.ubicacions === 'object' ? dades.ubicacions : {};
+      if (estable(nou) === estable(state.estudis) && estable(ub) === estable(state.ubicacions || {})) return false;
+      state.estudis = nou; state.ubicacions = ub; return true;
     }
     if (!COLS.includes(col)) return false;
     const r = state[col].find((x) => x.id === id);
@@ -122,7 +123,10 @@ const Sync = (() => {
       });
     }
     const est = remots.find((f) => f.coleccio === 'config' && f.id === 'estudis');
-    if (est) state.estudis = [...new Set([...(est.dades.llista || []), ...state.estudis])];
+    if (est) {
+      state.estudis = [...new Set([...(est.dades.llista || []), ...state.estudis])];
+      state.ubicacions = { ...(state.ubicacions || {}), ...(est.dades.ubicacions || {}) };
+    }
   }
 
   async function baixa() {

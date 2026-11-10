@@ -46,13 +46,13 @@ function seed() {
   return {
     programes: [
       { id: 'p-lluna', nom: 'La cara oculta de la lluna', tipus: 'podcast', color: '#3D4B6B', imatge: 'img/la-cara-oculta-de-la-lluna.jpg' },
-      { id: 'p-blanc-negre', nom: 'Blanc & Negre', tipus: 'podcast', color: '#B08D57', imatge: 'img/blanc-i-negre.jpg' },
+      { id: 'p-blanc-negre', nom: 'Blanc & Negre', tipus: 'podcast', color: '#E03131', imatge: 'img/blanc-i-negre.jpg' },
     ],
     persones: [
       { id: angel, nom: 'Angel Ayats', rol: 'Producció i realització' },
       { id: david, nom: 'David Izquierdo', rol: 'Presentació' },
     ],
-    estudis: ['Estudi 1'],
+    estudis: ['Estudi 1'], ubicacions: {},
     gravacions: [],
   };
 }
@@ -61,6 +61,7 @@ function normalize(d) {
   return {
     programes: arr(d.programes), persones: arr(d.persones),
     estudis: arr(d.estudis).filter((s) => typeof s === 'string'),
+    ubicacions: d.ubicacions && typeof d.ubicacions === 'object' && !Array.isArray(d.ubicacions) ? d.ubicacions : {},
     gravacions: arr(d.gravacions).map((g) => ({ presentadors: [], durada: 60, estat: 'pendent', ...g })),
   };
 }
@@ -339,9 +340,9 @@ function estadistiques() {
   const files = [...Array(12)].map((_, i) => {
     const mes = i + 1;
     const total = compta(gravades, '', mes) + state.programes.reduce((s, p) => s + compta(gravades, p.id, mes), 0);
-    return `<tr class="${total ? '' : 'buit'}"><th>${cap(MESOS[i])}</th>${progs.map((p) => {
+    return `<tr class="${total ? '' : 'buit'}"><th><span class="llarg">${cap(MESOS[i])}</span><span class="curt">${cap(MESOS[i]).slice(0, 3)}</span></th>${progs.map((p) => {
       const gv = compta(gravades, p.id, mes), pb = compta(publicades, p.id, mes);
-      return `<td><div class="barra" style="--c:${p.color}"><i style="width:${(gv / max) * 100}%"></i><span>${gv ? `${gv} grav.${pb ? ` · ${pb} publ.` : ''}` : '—'}</span></div></td>`;
+      return `<td><div class="barra" style="--c:${p.color}"><i style="width:${(gv / max) * 100}%"></i><span><span class="llarg">${gv ? `${gv} grav.${pb ? ` · ${pb} publ.` : ''}` : '—'}</span><span class="curt">${gv ? `${gv}${pb ? ` · ${pb}` : ''}` : '—'}</span></span></div></td>`;
     }).join('')}</tr>`;
   }).join('');
   const totals = `<tr class="total"><th>Total</th>${progs.map((p) => {
@@ -588,12 +589,22 @@ function waNum(tel) {
 }
 const waLink = (tel, text) => (waNum(tel) ? `https://wa.me/${waNum(tel)}${text ? '?text=' + encodeURIComponent(text) : ''}` : '');
 const proximaGravacio = (p) => historial(p).filter((g) => g.data && g.data >= ymd(new Date())).pop();
-// Missatge inicial: si té una gravació programada, un recordatori (es pot canviar abans d'enviar)
-function missatgeConv(p) {
+// Enllaç de mapa de l'estudi: si s'ha desat un enllaç, aquest; si és una adreça, una cerca a Google Maps
+const mapaEstudi = (nom) => {
+  const v = String(state.ubicacions?.[nom] || '').trim();
+  return !v ? '' : /^https?:\/\//i.test(v) ? v : `https://maps.google.com/?q=${encodeURIComponent(v)}`;
+};
+// Recordatori d'una gravació per a un convidat (es pot canviar abans d'enviar)
+function missatgeGrav(p, g) {
   const nom = (p.nom || '').split(' ')[0];
+  const mapa = mapaEstudi(g.estudi);
+  return `Hola ${nom}! Et recordo la gravació de «${progNom(g)}» el ${dataLlarga(g.data)} a les ${g.hora}${g.estudi ? ` a ${g.estudi}` : ''}.`
+    + (mapa ? `\n📍 Com arribar-hi: ${mapa}` : '') + '\nFins aviat!';
+}
+// Missatge inicial de la fitxa: si té una gravació programada, el recordatori
+function missatgeConv(p) {
   const g = proximaGravacio(p);
-  if (!g) return `Hola ${nom}!`;
-  return `Hola ${nom}! Et recordo la gravació de «${progNom(g)}» el ${dataLlarga(g.data)} a les ${g.hora}${g.estudi ? ` a ${g.estudi}` : ''}. Fins aviat!`;
+  return g ? missatgeGrav(p, g) : `Hola ${(p.nom || '').split(' ')[0]}!`;
 }
 
 /* ---------- Contactes: omplir la fitxa del convidat ---------- */
@@ -665,6 +676,13 @@ function renderConfig(m) {
       <p class="help">Els espais on es grava. L'app avisa si dues gravacions coincideixen al mateix estudi.</p>
       <div class="tags">${state.estudis.map((s, i) => `<span class="tag">${esc(s)}<button data-action="treu-estudi" data-i="${i}" aria-label="Treu ${esc(s)}">×</button></span>`).join('') || '<span class="empty">Cap estudi</span>'}</div>
       <form class="inline-form" id="formEstudi"><input name="estudi" placeholder="Nom de l'estudi"><button class="btn">Afegeix</button></form>
+      ${state.estudis.length ? `<form id="formUbic" class="ubicacions">
+        <p class="help" style="margin-top:14px"><b>📍 Ubicació</b> · S'afegeix al WhatsApp de recordatori perquè el convidat sàpiga com arribar-hi. Enganxa l'enllaç de Google Maps o d'Apple Maps (Compartir → Copiar), o escriu l'adreça.</p>
+        ${state.estudis.map((s, i) => `<label>${esc(s)}
+          <div class="grp"><input name="ub${i}" value="${esc(state.ubicacions[s] || '')}" placeholder="Adreça o enllaç del mapa">
+          ${mapaEstudi(s) ? `<a class="btn small" href="${esc(mapaEstudi(s))}" target="_blank" rel="noopener">Obre el mapa</a>` : ''}</div></label>`).join('')}
+        <button class="btn">Desa les ubicacions</button>
+      </form>` : ''}
     </div>
     <div class="section">
       <h2>Còpia de seguretat</h2>
@@ -705,6 +723,12 @@ function renderConfig(m) {
     if (!v) return;
     if (state.estudis.includes(v)) { toast('Aquest estudi ja existeix.'); return; }
     state.estudis.push(v); save(); render();
+  });
+  $('#formUbic')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    state.estudis.forEach((s, i) => { const v = String(f.get('ub' + i) || '').trim(); if (v) state.ubicacions[s] = v; else delete state.ubicacions[s]; });
+    save(); render(); toast('Ubicacions desades.');
   });
   $('#fitxer').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -788,6 +812,7 @@ function openGravacio(g, dataPerDefecte) {
         <input name="convidatsNous" list="llistaNomsConv" value="${esc((g.convidatsIds || []).length ? '' : (g.convidats || ''))}" placeholder="Escriu el nom (si ja té fitxa, s'hi enllaça)"></label>
       <datalist id="llistaNomsConv">${convidatsPers().map((p) => `<option value="${esc(p.nom)}">`).join('')}</datalist>
       <span class="hint">Per treure'n un, desmarca'l. Diversos noms, separats per comes.</span>
+      ${!nou && g.data ? (g.convidatsIds || []).map(pers).filter((p) => p && waLink(p.telefon)).map((p) => `<a class="btn small" style="margin-top:8px" href="${esc(waLink(p.telefon, missatgeGrav(p, g)))}" target="_blank" rel="noopener">💬 Recordatori a ${esc(p.nom)}</a>`).join(' ') : ''}
     </fieldset>
     <fieldset><legend>Checklist de l'episodi</legend>
       <div class="checks">${CHECKLIST.map(([k, nom]) => `<label><input type="checkbox" name="checklist" value="${k}" ${g.checklist?.[k] ? 'checked' : ''}> ${nom}</label>`).join('')}</div>
@@ -948,7 +973,7 @@ $('#main').addEventListener('click', (e) => {
     case 'nova-persona': return openPersona(null);
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
-    case 'treu-estudi': state.estudis.splice(Number(el.dataset.i), 1); save(); break;
+    case 'treu-estudi': { const [nom] = state.estudis.splice(Number(el.dataset.i), 1); delete state.ubicacions[nom]; save(); break; }
     case 'exporta': return exporta();
     case 'copia-cal':
       navigator.clipboard?.writeText(el.dataset.url).then(() => toast('Enllaç copiat.'), () => toast('No s\'ha pogut copiar.'));
@@ -956,7 +981,7 @@ $('#main').addEventListener('click', (e) => {
     case 'importa': return $('#fitxer').click();
     case 'esborra-tot':
       if (!confirm('Segur que vols esborrar TOTES les dades? Exporta-les abans si les vols conservar.')) return;
-      state = { programes: [], persones: [], estudis: [], gravacions: [] }; save(); toast('Dades esborrades.'); break;
+      state = { programes: [], persones: [], estudis: [], ubicacions: {}, gravacions: [] }; save(); toast('Dades esborrades.'); break;
     case 'exemple':
       if (!confirm('Substituir les dades actuals per les inicials (els dos podcasts i l\'equip)?')) return;
       state = seed(); save(); break;
