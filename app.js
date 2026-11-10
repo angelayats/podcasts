@@ -495,12 +495,29 @@ const historial = (p) => state.gravacions
   .sort((a, b) => ordena(b, a));
 
 function renderPersones(m) {
-  const avui = ymd(new Date());
-  const conv = convidatsPers();
   m.innerHTML = `
+    <div class="cerca-fixa">
+      <input type="search" id="cercaConv" placeholder="🔎 Cerca una fitxa pel nom…" value="${esc(ui.cercaConv || '')}" autocomplete="off">
+      <select id="filtreConv" aria-label="Filtra convidats">${[['', 'Tots'], ['vingut', 'Ja han vingut'], ['propers', 'Amb gravació pendent'], ['potencials', 'Potencials']]
+        .map(([v, n]) => `<option value="${v}" ${(ui.filtreConv || '') === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+    </div>
     <div class="toolbar"><div class="grp" style="width:auto"><h2 style="margin:0">Equip</h2></div>
       <button class="btn primary" data-action="nova-persona">+ Nova persona</button></div>
-    <div class="cards equip">${equipPers().map((p) => {
+    <div class="cards equip" id="llistaEquip">${llistaEquip()}</div>
+
+    <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Convidats <span class="hint" id="compteConv"></span></h2></div>
+      <button class="btn primary" data-action="nou-convidat">+ Nou convidat</button></div>
+    <div class="cards equip" id="llistaConv">${llistaConvidats()}</div>`;
+  // El cercador queda just sota la capçalera quan es baixa la pantalla
+  document.documentElement.style.setProperty('--alt-cap', (document.querySelector('header')?.offsetHeight || 0) + 'px');
+  $('#compteConv').textContent = compteConv();
+}
+const coincideixNom = (txt) => { const q = clauCerca(ui.cercaConv); return !q || q.split(' ').every((w) => clauCerca(txt).includes(w)); };
+function llistaEquip() {
+  const avui = ymd(new Date());
+  const gent = equipPers().filter((p) => coincideixNom([p.nom, p.rol].join(' ')));
+  if (!gent.length && ui.cercaConv) return '<p class="empty">Ningú de l\'equip coincideix amb la cerca.</p>';
+  return gent.map((p) => {
       const n = state.gravacions.filter((g) => g.data >= avui && g.estat !== 'cancellat' && (g.tecnic === p.id || (g.presentadors || []).includes(p.id))).length;
       return `<div class="item persona">
         <div class="avatar">${esc(inicials(p.nom))}</div>
@@ -510,22 +527,15 @@ function renderPersones(m) {
         </div>
         <button class="btn small" data-action="edita-persona" data-id="${p.id}">Edita</button>
       </div>`;
-    }).join('') || '<p class="empty">Encara no hi ha ningú. Afegeix presentadors, tècnics, productors…</p>'}</div>
-
-    <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Convidats</h2></div>
-      <button class="btn primary" data-action="nou-convidat">+ Nou convidat</button></div>
-    ${conv.length > 6 ? `<div class="toolbar"><div class="grp" style="width:auto">
-      <input type="search" id="cercaConv" placeholder="Cerca convidat…" value="${esc(ui.cercaConv || '')}" style="max-width:320px">
-      <select id="filtreConv" aria-label="Filtra convidats" style="width:auto">${[['', 'Tots'], ['vingut', 'Ja han vingut'], ['propers', 'Amb gravació pendent'], ['potencials', 'Potencials']]
-        .map(([v, n]) => `<option value="${v}" ${(ui.filtreConv || '') === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>` : ''}
-    <div class="cards equip" id="llistaConv">${llistaConvidats()}</div>`;
+  }).join('') || '<p class="empty">Encara no hi ha ningú. Afegeix presentadors, tècnics, productors…</p>';
 }
+const compteConv = () => { const n = $('#llistaConv')?.querySelectorAll('.item').length || 0, t = convidatsPers().length; return n === t ? `(${t})` : `(${n} de ${t})`; };
 function llistaConvidats() {
-  const q = (ui.cercaConv || '').trim().toLowerCase();
+  const q = ui.cercaConv || '';
   const avui = ymd(new Date());
   const f = ui.filtreConv || '';
   const conv = convidatsPers()
-    .filter((p) => !q || [p.nom, p.notes, p.email].join(' ').toLowerCase().includes(q))
+    .filter((p) => coincideixNom([p.nom, p.notes, p.email, p.telefon].join(' ')))
     .map((p) => {
       const h = historial(p);
       return { p, vingut: h.filter((g) => jaGravada(g, avui)), propera: h.filter((g) => !jaGravada(g, avui)).pop() };
@@ -1088,7 +1098,10 @@ $('#main').addEventListener('input', (e) => {
   if (e.target.id === 'cerca') { ui.cerca = e.target.value; renderTaula(); }
   if (e.target.id === 'cercaStats') { ui.cercaStats = e.target.value; $('#statsLlista').innerHTML = llistaStats(); }
   if (e.target.id === 'cercaConv' || e.target.id === 'filtreConv') {
-    ui[e.target.id] = e.target.value; $('#llistaConv').innerHTML = llistaConvidats();
+    ui[e.target.id] = e.target.value;
+    $('#llistaConv').innerHTML = llistaConvidats();
+    $('#llistaEquip').innerHTML = llistaEquip();
+    $('#compteConv').textContent = compteConv();
   }
 });
 mobil.addEventListener('change', render);
