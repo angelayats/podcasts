@@ -1244,10 +1244,13 @@ function imprimeix(titol, seccions) {
 }
 const grav = (g) => (g.data ? `${dataCurta(g.data)} ${g.hora || ''}`.trim() : '—');
 const emis = (g) => (g.emissio ? `${dataCurta(g.emissio)}${g.horaEmissio ? ' ' + g.horaEmissio : ''}` : '—');
-const seccioEpisodis = (eps, nom = 'Episodis') => ({
-  nom, cols: ['Núm.', 'Títol', 'Programa', 'Gravació', 'Emissió', 'Estat'],
-  files: eps.map((g) => [g.numero || '', g.titol, progNom(g), grav(g), emis(g), estatNom(g.estat)]),
-});
+const seccioEpisodis = (eps, nom = 'Episodis') => {
+  const unProg = new Set(eps.map((g) => g.programaId)).size === 1;   // si tots són del mateix programa, sobra la columna
+  return {
+    nom, cols: ['Núm.', 'Títol', ...(unProg ? [] : ['Programa']), 'Gravació', 'Emissió', 'Estat'],
+    files: eps.map((g) => [g.numero || '', g.titol, ...(unProg ? [] : [progNom(g)]), grav(g), emis(g), estatNom(g.estat)]),
+  };
+};
 function situacioConv(p) {
   const h = historial(p), fets = h.filter((g) => jaGravada(g)), previst = h.filter((g) => !jaGravada(g)).pop();
   return [p.potencial ? 'Potencial' : '', fets.length ? `Ha vingut ${fets.length}× (${fets.map((g) => titolG(g)).join(', ')})` : '',
