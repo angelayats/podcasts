@@ -1275,7 +1275,8 @@ function imprimeixLlista(que) {
   if (que === 'stats') {
     const l = ui.llistaStats;
     if (!l) return;
-    const titol = [l.titol, progStats() ? nomProg(progStats()) : ''].filter((x) => x && !l.titol.includes(x)).join(' · ');
+    const p = progStats() ? nomProg(progStats()) : '';
+    const titol = p && !l.titol.includes(p) ? `${l.titol} · ${p}` : l.titol;
     return imprimeix(titol, [
       seccioConvidats(l.gent),
       { nom: 'Artistes', cols: ['Artista', 'Episodis'], files: l.arts.map((a) => [a.nom, a.eps.map((g) => `${titolG(g)} (${estatNom(g.estat)})`).join(' · ')]) },
