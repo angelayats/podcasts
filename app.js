@@ -476,6 +476,7 @@ function llistaConvidats() {
         ${propera ? `<div class="sub">Propera: <b>${propera.data ? 'gravació ' + dataCurta(propera.data) : (propera.emissio ? 'emissió ' + dataCurta(propera.emissio) : 'sense data')}</b> (${esc(titolG(propera))})</div>` : ''}
         <div class="sub contacte">
           ${p.telefon ? `<a href="tel:${esc(p.telefon.replace(/\s+/g, ''))}">📞 ${esc(p.telefon)}</a>` : ''}
+          ${waLink(p.telefon) ? `<a href="${esc(waLink(p.telefon, missatgeConv(p)))}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
           ${p.email ? `<a href="mailto:${esc(p.email)}">✉️ ${esc(p.email)}</a>` : ''}
         </div>
       </div>
@@ -502,6 +503,10 @@ function openPersona(p, tipus) {
       <div class="row">
         <label>Telèfon <input type="tel" name="telefon" value="${esc(p.telefon)}" placeholder="600 000 000"></label>
         <label>Correu <input type="email" name="email" value="${esc(p.email)}" placeholder="nom@exemple.com"></label>
+      </div>
+      <div class="grp" style="width:auto">
+        <button type="button" class="btn small" data-dlg="whatsapp">💬 Envia un WhatsApp</button>
+        ${proximaGravacio(p) ? '<span class="hint">Amb un recordatori de la propera gravació</span>' : ''}
       </div>
       <label>Notes <textarea name="notes" rows="3" placeholder="Temes, com el vam conèixer, preferències…">${esc(p.notes)}</textarea></label>
       <label class="check"><input type="checkbox" name="potencial" ${p.potencial ? 'checked' : ''}> Convidat potencial (encara per confirmar)</label>
@@ -539,6 +544,12 @@ function openPersona(p, tipus) {
         if (g) { closeDialog(); openGravacio(g); }
       }
       if (a === 'contacte') triaContacte();
+      if (a === 'whatsapp') {
+        const f = $('#dlgForm').elements;
+        const enllac = waLink(f.telefon.value, missatgeConv({ ...p, nom: f.nom.value.trim() || p.nom }));
+        if (enllac) window.open(enllac, '_blank', 'noopener');
+        else toast('Cal posar un telèfon mòbil vàlid.');
+      }
     },
   });
   $('#fitxerVcf')?.addEventListener('change', async (e) => {
@@ -556,6 +567,25 @@ function openPersona(p, tipus) {
       else toast(nomForm ? `No he trobat «${nomForm}» en aquest fitxer de contactes.` : 'Escriu primer el nom del convidat.');
     } catch (err) { toast("No s'ha pogut llegir el contacte."); }
   });
+}
+
+/* ---------- WhatsApp ---------- */
+// Número en format internacional sense «+» (els de 9 xifres s'entenen d'Espanya)
+function waNum(tel) {
+  let d = String(tel || '').trim().replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) d = d.slice(1);
+  else if (d.startsWith('00')) d = d.slice(2);
+  else if (d.length === 9) d = '34' + d;
+  return /^\d{10,15}$/.test(d) ? d : '';
+}
+const waLink = (tel, text) => (waNum(tel) ? `https://wa.me/${waNum(tel)}${text ? '?text=' + encodeURIComponent(text) : ''}` : '');
+const proximaGravacio = (p) => historial(p).filter((g) => g.data && g.data >= ymd(new Date())).pop();
+// Missatge inicial: si té una gravació programada, un recordatori (es pot canviar abans d'enviar)
+function missatgeConv(p) {
+  const nom = (p.nom || '').split(' ')[0];
+  const g = proximaGravacio(p);
+  if (!g) return `Hola ${nom}!`;
+  return `Hola ${nom}! Et recordo la gravació de «${progNom(g)}» el ${dataLlarga(g.data)} a les ${g.hora}${g.estudi ? ` a ${g.estudi}` : ''}. Fins aviat!`;
 }
 
 /* ---------- Contactes: omplir la fitxa del convidat ---------- */
