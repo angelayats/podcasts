@@ -456,3 +456,14 @@ button.barra.on, .total-prog.on { box-shadow: inset 0 0 0 2px var(--c, var(--acc
 .cerca-fixa { position: sticky; top: var(--alt-cap, 0px); z-index: 15; display: flex; gap: 8px; margin: -6px -4px 14px; padding: 8px 4px; background: var(--bg); }
 .cerca-fixa input { flex: 1; min-width: 0; font-size: 16px; }
 .cerca-fixa select { width: auto; flex: none; }
+
+/* Fitxes de persones: en fila i compactes, per poder-ne veure moltes de cop */
+.item.persona { flex-direction: row; }
+.cerca-fixa select { max-width: 42%; }
+@media (max-width: 760px) {
+  .cards.equip { gap: 6px; }
+  .item.persona { padding: 9px 10px; gap: 10px; border-radius: 12px; }
+  .item.persona .avatar { width: 36px; height: 36px; font-size: 14px; }
+  .item.persona h3 { font-size: 15px; }
+  .item.persona .sub { font-size: 12px; }
+}
