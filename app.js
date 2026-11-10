@@ -91,7 +91,7 @@ function desaPref(k, v) { try { localStorage.setItem('podcasts-pref-' + k, JSON.
 const ui = {
   view: 'calendari', mode: 'mes', cursor: new Date(), diaSel: ymd(new Date()),
   filtrePrograma: '', filtreEstat: '', cerca: '', nomesProperes: true,
-  veureEmissions: llegeixPref('veureEmissions', true), agendaTipus: llegeixPref('agendaTipus', 'gravacions'),
+  veureEmissions: llegeixPref('veureEmissions', true), progStats: llegeixPref('progStats', ''), agendaTipus: llegeixPref('agendaTipus', 'gravacions'),
 };
 
 const prog = (id) => state.programes.find((p) => p.id === id);
@@ -326,19 +326,49 @@ function renderProgrames(m) {
 }
 
 /* ---------- Estadístiques ---------- */
+// Programa triat a les estadístiques ('' = tots)
+const progStats = () => (ui.progStats && prog(ui.progStats) ? ui.progStats : '');
+const delProg = (llista) => (progStats() ? llista.filter((g) => g.programaId === progStats()) : llista);
+// Un programa «de convidats» té episodis amb convidats; un «musical», episodis amb artistes a les notes
+const ARTISTA = /^(Clàssic|Contemporani):\s*(.+?)(?:\s+—\s+.*)?$/;
+const teConvidats = () => delProg(state.gravacions).some((g) => (g.convidatsIds || []).length) || (!progStats() && convidatsPers().length);
+const teArtistes = () => delProg(state.gravacions).some((g) => (g.notes || '').split('\n').some((l) => ARTISTA.test(l)));
+// Artistes que surten als episodis: { nom, eps: [episodis] }
+function artistes(eps) {
+  const m = new Map();
+  eps.forEach((g) => (g.notes || '').split('\n').forEach((l) => {
+    const x = l.trim().match(ARTISTA);
+    if (!x) return;
+    const k = clauCerca(x[2]);
+    if (!m.has(k)) m.set(k, { nom: x[2].trim(), eps: [] });
+    if (!m.get(k).eps.includes(g)) m.get(k).eps.push(g);
+  }));
+  return [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'ca'));
+}
 // Grups de les targetes: [títol, llista]
 function grupsStats() {
   const any = ui.anyStats || new Date().getFullYear(), avui = ymd(new Date());
-  const del = state.gravacions.filter((g) => dataRef(g).startsWith(String(any)));
-  const conv = convidatsPers();
-  return {
+  const tots = delProg(state.gravacions);
+  const del = tots.filter((g) => dataRef(g).startsWith(String(any)));
+  const pid = progStats();
+  const grups = {
     gravats: [`Episodis gravats ${any}`, del.filter((g) => GRAVADA.includes(g.estat))],
     publicats: [`Publicats ${any}`, del.filter((g) => g.estat === 'publicat')],
-    perPublicar: ['Pendents de publicar', state.gravacions.filter((g) => g.estat === 'gravat' || g.estat === 'editat')],
-    perGravar: ['Pendents de gravar', state.gravacions.filter((g) => g.estat === 'pendent' || g.estat === 'confirmat')],
-    vinguts: ['Convidats que ja han vingut', conv.filter((p) => historial(p).some((g) => jaGravada(g, avui)))],
-    potencials: ['Convidats potencials', conv.filter((p) => p.potencial)],
+    perPublicar: ['Pendents de publicar', tots.filter((g) => g.estat === 'gravat' || g.estat === 'editat')],
+    perGravar: ['Pendents de gravar', tots.filter((g) => g.estat === 'pendent' || g.estat === 'confirmat')],
   };
+  if (teConvidats()) {
+    const conv = convidatsPers();
+    const delPrograma = (p) => !pid || historial(p).some((g) => g.programaId === pid);
+    grups.vinguts = ['Convidats que ja han vingut', conv.filter((p) => historial(p).some((g) => (!pid || g.programaId === pid) && jaGravada(g, avui)))];
+    // Els potencials sense cap episodi encara no són de cap programa: surten a tots els programes amb convidats
+    grups.potencials = ['Convidats potencials', conv.filter((p) => p.potencial && (delPrograma(p) || !historial(p).length))];
+  }
+  if (teArtistes()) {
+    grups.artistesFets = ['Artistes que ja han sortit', artistes(tots.filter((g) => jaGravada(g, avui)))];
+    grups.artistesPrevistos = ['Artistes previstos', artistes(tots.filter((g) => !jaGravada(g, avui) && g.estat !== 'cancellat'))];
+  }
+  return grups;
 }
 const filaEpisodi = (g) => `<button class="fila" data-action="edita" data-id="${g.id}">
   <span class="dot" style="--c:${color(g)}"></span><b>${esc(titolG(g))}</b><span class="badge ${g.estat}">${estatNom(g.estat)}</span>
@@ -350,50 +380,58 @@ const filaConvidat = (p) => {
     <span class="det">${fets.length ? `Ha vingut ${fets.length} ${fets.length === 1 ? 'vegada' : 'vegades'}: ${fets.map((g) => esc(titolG(g)) + ' (' + esc(progNom(g)) + ')').join(', ')}`
       : h.length ? `Previst: ${esc(titolG(h.filter((g) => !jaGravada(g)).pop() || h[0]))}` : 'Encara no ha vingut'}</span></button>`;
 };
+const filaArtista = (a) => `<button class="fila" data-action="edita" data-id="${a.eps[0].id}">
+  <span class="avatar conv mini">🎸</span><b>${esc(a.nom)}</b><span class="hint">${a.eps.length} ${a.eps.length === 1 ? 'episodi' : 'episodis'}</span>
+  <span class="det">${a.eps.map((g) => `${esc(titolG(g))} (${estatNom(g.estat)})`).join(' · ')}</span></button>`;
 // Llistat desplegat sota les targetes (segons la xifra tocada i el cercador)
 function llistaStats() {
   const sel = ui.statsSel, q = clauCerca(ui.cercaStats);
   const coincideix = (txt) => !q || q.split(' ').every((w) => clauCerca(txt).includes(w));
   const textEp = (g) => [titolG(g), g.notes, ...nomsConvidats(g), progNom(g)].join(' ');
   if (!sel && !q) return '';
-  let titol, eps = [], gent = [];
-  if (!sel) {
+  let titol, eps = [], gent = [], arts = [];
+  const grups = grupsStats();
+  if (!sel || !grups[sel.tipus] && sel.tipus !== 'mes' && sel.tipus !== 'prog') {
     titol = 'Resultats de la cerca';
-    eps = state.gravacions; gent = convidatsPers();
+    eps = delProg(state.gravacions);
+    if (teConvidats()) gent = grups.potencials ? [...new Set([...convidatsPers().filter((p) => !progStats() || historial(p).some((g) => g.programaId === progStats())), ...grups.potencials[1]])] : [];
   } else if (sel.tipus === 'mes' || sel.tipus === 'prog') {
-    const [, gravades] = grupsStats().gravats;
     const p = prog(sel.prog);
-    eps = gravades.filter((g) => (g.programaId || '') === sel.prog && (sel.tipus === 'prog' || Number(dataRef(g).slice(5, 7)) === sel.mes));
+    eps = grups.gravats[1].filter((g) => (g.programaId || '') === sel.prog && (sel.tipus === 'prog' || Number(dataRef(g).slice(5, 7)) === sel.mes));
     titol = `${p?.nom || 'Sense programa'} · ${sel.tipus === 'mes' ? cap(MESOS[sel.mes - 1]) + ' ' : ''}${ui.anyStats || new Date().getFullYear()}`;
   } else {
-    const [nom, llista] = grupsStats()[sel.tipus];
+    const [nom, llista] = grups[sel.tipus];
     titol = nom;
-    if (sel.tipus === 'vinguts' || sel.tipus === 'potencials') gent = llista; else eps = llista;
+    if (sel.tipus === 'vinguts' || sel.tipus === 'potencials') gent = llista;
+    else if (sel.tipus.startsWith('artistes')) arts = llista;
+    else eps = llista;
   }
   eps = eps.filter((g) => coincideix(textEp(g))).sort(ordena);
   gent = gent.filter((p) => coincideix([p.nom, p.notes].join(' ')));
-  const buit = !eps.length && !gent.length;
+  arts = arts.filter((a) => coincideix(a.nom + ' ' + a.eps.map(textEp).join(' ')));
+  const n = (x, u, v) => (x.length ? `${x.length} ${x.length === 1 ? u : v}` : '');
+  const parts = [[gent, 'Convidats', filaConvidat], [arts, 'Artistes', filaArtista], [eps, 'Episodis', filaEpisodi]].filter(([x]) => x.length);
   return `<div class="panel llista-stats">
-    <div class="cap-llista"><b>${esc(titol)}</b><span class="hint">${gent.length ? gent.length + ' convidats' : ''}${gent.length && eps.length ? ' · ' : ''}${eps.length ? eps.length + ' episodis' : ''}</span>
+    <div class="cap-llista"><b>${esc(titol)}</b><span class="hint">${[n(gent, 'convidat', 'convidats'), n(arts, 'artista', 'artistes'), n(eps, 'episodi', 'episodis')].filter(Boolean).join(' · ')}</span>
       ${sel ? '<button class="btn small" data-action="stats" data-tipus="">Tanca</button>' : ''}</div>
-    ${buit ? `<p class="empty" style="padding:12px">${q ? `Cap coincidència: «${esc(ui.cercaStats)}» no ha sortit mai.` : 'No hi ha res en aquest llistat.'}</p>` : ''}
-    ${gent.length && eps.length ? '<h4>Convidats</h4>' : ''}${gent.map(filaConvidat).join('')}
-    ${gent.length && eps.length ? '<h4>Episodis</h4>' : ''}${eps.map(filaEpisodi).join('')}
+    ${!parts.length ? `<p class="empty" style="padding:12px">${q ? `Cap coincidència: «${esc(ui.cercaStats)}» no ha sortit mai${progStats() ? ' a ' + esc(prog(progStats()).nom) : ''}.` : 'No hi ha res en aquest llistat.'}</p>` : ''}
+    ${parts.map(([x, nom, fila]) => (parts.length > 1 ? `<h4>${nom}</h4>` : '') + x.map(fila).join('')).join('')}
   </div>`;
 }
 function estadistiques() {
   const anys = [...new Set([new Date().getFullYear(), ...state.gravacions.filter(dataRef).map((g) => Number(dataRef(g).slice(0, 4)))])].sort((a, b) => b - a);
   const any = ui.anyStats || new Date().getFullYear();
-  const del = state.gravacions.filter((g) => dataRef(g).startsWith(String(any)));
+  const del = delProg(state.gravacions).filter((g) => dataRef(g).startsWith(String(any)));
   const gravades = del.filter((g) => GRAVADA.includes(g.estat));
   const publicades = del.filter((g) => g.estat === 'publicat');
-  const progs = [...state.programes, ...(del.some((g) => !prog(g.programaId)) ? [{ id: '', nom: 'Sense programa', color: '#868E96' }] : [])];
+  const progs = progStats() ? [prog(progStats())]
+    : [...state.programes, ...(del.some((g) => !prog(g.programaId)) ? [{ id: '', nom: 'Sense programa', color: '#868E96' }] : [])];
   const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && Number(dataRef(g).slice(5, 7)) === mes).length;
   const max = Math.max(1, ...progs.flatMap((p) => [...Array(12)].map((_, i) => compta(gravades, p.id, i + 1))));
 
   const files = [...Array(12)].map((_, i) => {
     const mes = i + 1;
-    const total = compta(gravades, '', mes) + state.programes.reduce((s, p) => s + compta(gravades, p.id, mes), 0);
+    const total = progs.reduce((s, p) => s + compta(gravades, p.id, mes), 0);
     return `<tr class="${total ? '' : 'buit'}"><th><span class="llarg">${cap(MESOS[i])}</span><span class="curt">${cap(MESOS[i]).slice(0, 3)}</span></th>${progs.map((p) => {
       const gv = compta(gravades, p.id, mes), pb = compta(publicades, p.id, mes);
       const sel = ui.statsSel?.tipus === 'mes' && ui.statsSel.prog === p.id && ui.statsSel.mes === mes;
@@ -404,14 +442,18 @@ function estadistiques() {
     const gv = gravades.filter((g) => (g.programaId || '') === p.id).length, pb = publicades.filter((g) => (g.programaId || '') === p.id).length;
     return `<td><button class="total-prog ${ui.statsSel?.tipus === 'prog' && ui.statsSel.prog === p.id ? 'on' : ''}" data-action="stats" data-tipus="prog" data-prog="${p.id}"><b>${gv}</b> grav. · <b>${pb}</b> publ.</button></td>`;
   }).join('')}</tr>`;
+  const placeholder = teConvidats() && teArtistes() ? 'Cerca un convidat o artista' : teArtistes() ? 'Cerca un artista o disc' : 'Cerca un convidat';
 
   return `<div class="stats">
     <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Estadístiques</h2></div>
-      <select data-filter="any" aria-label="Any" style="width:auto">${anys.map((a) => `<option ${a === any ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
+      <div class="grp" style="width:auto">
+        <select data-filter="progStats" aria-label="Programa" style="width:auto">${progOptions(progStats(), 'Tots els programes')}</select>
+        <select data-filter="any" aria-label="Any" style="width:auto">${anys.map((a) => `<option ${a === any ? 'selected' : ''}>${a}</option>`).join('')}</select>
+      </div></div>
     <div class="metrics">${Object.entries(grupsStats()).map(([k, [nom, llista]]) =>
       `<button class="metric ${ui.statsSel?.tipus === k ? 'on' : ''}" data-action="stats" data-tipus="${k}"><span>${esc(nom)}</span><b>${llista.length}</b></button>`).join('')}
     </div>
-    <div class="toolbar"><input type="search" id="cercaStats" value="${esc(ui.cercaStats || '')}" placeholder="🔎 Cerca un convidat o artista per saber si ja ha sortit…"></div>
+    <div class="toolbar"><input type="search" id="cercaStats" value="${esc(ui.cercaStats || '')}" placeholder="🔎 ${placeholder} per saber si ja ha sortit…"></div>
     <div id="statsLlista">${llistaStats()}</div>
     <div class="panel"><table class="taula-stats">
       <thead><tr><th>Mes</th>${progs.map((p) => `<th><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</th>`).join('')}</tr></thead>
@@ -1092,6 +1134,7 @@ $('#main').addEventListener('change', (e) => {
   if (f === 'tipus') { ui.agendaTipus = t.value; desaPref('agendaTipus', t.value); }
   if (f === 'emissions') { ui.veureEmissions = t.checked; desaPref('veureEmissions', t.checked); render(); return; }
   if (f === 'any') { ui.anyStats = Number(t.value); render(); return; }
+  if (f === 'progStats') { ui.progStats = t.value; ui.statsSel = null; desaPref('progStats', t.value); render(); return; }
   ui.view === 'agenda' ? renderTaula() : render();
 });
 $('#main').addEventListener('input', (e) => {
