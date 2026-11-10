@@ -365,8 +365,10 @@ function grupsStats() {
     grups.potencials = ['Convidats potencials', conv.filter((p) => p.potencial && (delPrograma(p) || !historial(p).length))];
   }
   if (teArtistes()) {
-    grups.artistesFets = ['Artistes que ja han sortit', artistes(tots.filter((g) => jaGravada(g, avui)))];
-    grups.artistesPrevistos = ['Artistes previstos', artistes(tots.filter((g) => !jaGravada(g, avui) && g.estat !== 'cancellat'))];
+    // Cada artista porta tots els seus episodis, per veure si un previst ja havia sortit
+    const totsArt = artistes(tots.filter((g) => g.estat !== 'cancellat'));
+    grups.artistesFets = ['Artistes que ja han sortit', totsArt.filter((x) => x.eps.some((g) => jaGravada(g, avui)))];
+    grups.artistesPrevistos = ['Artistes previstos', totsArt.filter((x) => x.eps.some((g) => !jaGravada(g, avui)))];
   }
   return grups;
 }
