@@ -393,8 +393,22 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   dialog { width: 100vw; max-width: 100vw; max-height: 92dvh; margin: auto 0 0; border-radius: 20px 20px 0 0; }
 }
 
-/* ---------- Emissions i convidats potencials ---------- */
-.chip.emissio { background: transparent; border: 1px dashed var(--c); border-left: 3px dashed var(--c); }
-.card.emissio { border-style: dashed; border-left-style: solid; background: transparent; }
-.dots i.em { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c); }
+/* ---------- Gravacions destacades, emissions suaus ---------- */
+/* Gravació (cita real): color ple del programa */
+.chip:not(.emissio) { background: var(--c); color: #fff; font-weight: 600; border-left-color: color-mix(in srgb, var(--c) 70%, #000); }
+.chip:not(.emissio):hover { background: color-mix(in srgb, var(--c) 85%, #000); }
+.card.gravacio { background: color-mix(in srgb, var(--c) 12%, var(--surface)); border-color: color-mix(in srgb, var(--c) 35%, var(--border)); border-left-width: 6px; }
+.card.gravacio .h { color: var(--c); font-weight: 700; }
+@media (prefers-color-scheme: dark) { .card.gravacio .h { color: color-mix(in srgb, var(--c) 45%, #fff); } }
+tr.gravacio td:first-child { box-shadow: inset 4px 0 0 var(--c); font-weight: 700; }
+tr.gravacio td { background: color-mix(in srgb, var(--c) 7%, transparent); }
+/* Emissió (només informativa): discreta */
+.chip.emissio { background: transparent; border: 0; color: var(--muted); font-size: 11px; padding: 1px 6px; }
+.chip.emissio:hover { color: var(--text); background: var(--surface-2); }
+.card.emissio, .card.nomes-emissio { background: transparent; border: 1px dashed var(--border); border-left: 3px solid color-mix(in srgb, var(--c) 35%, transparent); opacity: .7; padding: 5px 10px; }
+.card.emissio:hover, .card.nomes-emissio:hover { opacity: 1; }
+.card.emissio .cover, .card.nomes-emissio .cover { width: 24px; height: 24px; filter: grayscale(.6); }
+.card.emissio .ti, .card.nomes-emissio .ti { font-weight: 600; font-size: 13px; }
+tr.nomes-emissio td { color: var(--muted); }
+.dots i.em { background: transparent; box-shadow: inset 0 0 0 1.5px var(--c); opacity: .6; }
 .badge.potencial { background: transparent; border: 1px dashed var(--muted); color: var(--muted); vertical-align: middle; margin-left: 4px; }

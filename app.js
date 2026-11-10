@@ -85,9 +85,12 @@ function save() {
 let state = load();
 save();
 
+function llegeixPref(k, def) { try { const v = localStorage.getItem('podcasts-pref-' + k); return v === null ? def : JSON.parse(v); } catch (e) { return def; } }
+function desaPref(k, v) { try { localStorage.setItem('podcasts-pref-' + k, JSON.stringify(v)); } catch (e) { /* no passa res */ } }
 const ui = {
   view: 'calendari', mode: 'mes', cursor: new Date(), diaSel: ymd(new Date()),
   filtrePrograma: '', filtreEstat: '', cerca: '', nomesProperes: true,
+  veureEmissions: llegeixPref('veureEmissions', true), agendaTipus: llegeixPref('agendaTipus', 'gravacions'),
 };
 
 const prog = (id) => state.programes.find((p) => p.id === id);
@@ -97,7 +100,7 @@ const progNom = (g) => prog(g.programaId)?.nom || 'Sense programa';
 const visibles = () => state.gravacions.filter((g) => !ui.filtrePrograma || g.programaId === ui.filtrePrograma);
 const delDia = (ds) => visibles().filter((g) => g.data === ds).sort((a, b) => toMin(a.hora) - toMin(b.hora));
 // Emissions del dia (data d'emissió), separades de les gravacions
-const emDia = (ds) => visibles().filter((g) => g.emissio === ds && g.estat !== 'cancellat').sort((a, b) => toMin(a.horaEmissio) - toMin(b.horaEmissio));
+const emDia = (ds) => (!ui.veureEmissions ? [] : visibles()).filter((g) => g.emissio === ds && g.estat !== 'cancellat').sort((a, b) => toMin(a.horaEmissio) - toMin(b.horaEmissio));
 // Data de referència: la de gravació; si encara no en té, la d'emissió
 const dataRef = (g) => g.data || g.emissio || '';
 // Ordre: per data; els que encara no tenen data van al final, per número d'episodi
@@ -152,7 +155,7 @@ function chipEmissio(g) {
 }
 function card(g) {
   const noms = equip(g);
-  return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
+  return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''} ${g.data ? 'gravacio' : 'nomes-emissio'}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
       <div class="h">${g.data ? '🎙️ ' : ''}${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
@@ -235,6 +238,7 @@ function renderCal(m) {
           <button data-action="mode" data-mode="setmana" class="${ui.mode === 'setmana' ? 'on' : ''}">Setmana</button>
         </div>
         <select data-filter="programa" aria-label="Filtra per programa">${progOptions(ui.filtrePrograma, 'Tots els programes')}</select>
+        <label class="check"><input type="checkbox" data-filter="emissions" ${ui.veureEmissions ? 'checked' : ''}> Emissions</label>
       </div>
     </div>
     <div class="legend">${legend}</div>
@@ -249,6 +253,9 @@ function renderAgenda(m) {
         <input type="search" id="cerca" placeholder="Cerca títol, convidat, nota…" value="${esc(ui.cerca)}">
         <select data-filter="programa" aria-label="Filtra per programa">${progOptions(ui.filtrePrograma, 'Tots els programes')}</select>
         <select data-filter="estat" aria-label="Filtra per estat">${estatOptions(ui.filtreEstat, 'Tots els estats')}</select>
+        <select data-filter="tipus" aria-label="Què es mostra">
+          <option value="gravacions" ${ui.agendaTipus === 'gravacions' ? 'selected' : ''}>🎙️ Només gravacions</option>
+          <option value="tots" ${ui.agendaTipus === 'tots' ? 'selected' : ''}>Gravacions i emissions</option></select>
         <label class="check"><input type="checkbox" data-filter="properes" ${ui.nomesProperes ? 'checked' : ''}> Només properes</label>
       </div>
     </div>
@@ -259,6 +266,7 @@ function renderTaula() {
   const avui = ymd(new Date());
   const q = ui.cerca.trim().toLowerCase();
   const rows = visibles()
+    .filter((g) => ui.agendaTipus === 'tots' || g.data)
     .filter((g) => !ui.filtreEstat || g.estat === ui.filtreEstat)
     .filter((g) => !ui.nomesProperes || !dataRef(g) || (g.data || '') >= avui || (g.emissio || '') >= avui)
     .filter((g) => !q || [titolG(g), ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
@@ -272,7 +280,7 @@ function renderTaula() {
   // Ordinador: taula
   const taula = `<div class="panel agenda-taula"><table>
     <thead><tr><th>Gravació</th><th>Horari</th><th>Emissió</th><th>Programa</th><th>Títol</th><th>Estudi</th><th>Equip</th><th>Convidats</th><th>Feina</th><th>Estat</th><th></th></tr></thead>
-    <tbody>${rows.map((g) => `<tr class="${g.estat === 'cancellat' ? 'cancel' : ''}">
+    <tbody>${rows.map((g) => `<tr class="${g.estat === 'cancellat' ? 'cancel' : ''} ${g.data ? 'gravacio' : 'nomes-emissio'}" style="--c:${color(g)}">
       <td class="nowrap">${dataCurta(g.data)}</td>
       <td class="nowrap">${g.data ? horari(g) : '—'}</td>
       <td class="nowrap">${g.emissio ? `${dataCurta(g.emissio)}${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}` : '—'}</td>
@@ -969,6 +977,8 @@ $('#main').addEventListener('change', (e) => {
   if (f === 'programa') ui.filtrePrograma = t.value;
   if (f === 'estat') ui.filtreEstat = t.value;
   if (f === 'properes') ui.nomesProperes = t.checked;
+  if (f === 'tipus') { ui.agendaTipus = t.value; desaPref('agendaTipus', t.value); }
+  if (f === 'emissions') { ui.veureEmissions = t.checked; desaPref('veureEmissions', t.checked); render(); return; }
   if (f === 'any') { ui.anyStats = Number(t.value); render(); return; }
   ui.view === 'agenda' ? renderTaula() : render();
 });
