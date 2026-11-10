@@ -98,6 +98,33 @@ h2, h3 { font-family: var(--font-title); font-weight: 600; letter-spacing: .3px;
 .sync-pill[data-estat=sense-clau], .sync-pill[data-estat=clau-dolenta] { border-color: #E8590C; }
 .sync-pill[data-estat=sense-clau] svg, .sync-pill[data-estat=error] svg, .sync-pill[data-estat=clau-dolenta] svg { stroke: #FF8A4C; }
 .sync-pill[data-estat=offline] svg { stroke: #999; }
+/* Checklist */
+.chk { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid var(--border); color: var(--muted); }
+.chk.tot { background: #D3EDD5; color: #1C5E28; border-color: #D3EDD5; }
+@media (prefers-color-scheme: dark) { .chk.tot { background: #173A1F; color: #8BE39B; border-color: #173A1F; } }
+
+/* Convidats */
+.avatar.conv { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.contacte { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 2px; }
+.contacte a { color: var(--text); text-decoration: none; }
+.contacte a:hover { text-decoration: underline; }
+.historial { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.historial button { width: 100%; text-align: left; border: 0; background: var(--surface-2); border-radius: 8px; padding: 7px 10px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.historial button:hover { filter: brightness(.96); }
+
+/* Estadístiques */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+.metric span { display: block; font-size: 13px; color: var(--muted); }
+.metric b { font-family: var(--font-title); font-size: 34px; font-weight: 600; }
+.taula-stats th:first-child { width: 110px; }
+.taula-stats tr.buit th, .taula-stats tr.buit span { color: var(--muted); opacity: .6; }
+.taula-stats tr.total td, .taula-stats tr.total th { border-top: 2px solid var(--border); }
+.barra { position: relative; height: 24px; border-radius: 6px; background: var(--surface-2); overflow: hidden; min-width: 120px; }
+.barra i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--c) 35%, transparent); border-right: 3px solid var(--c); }
+.barra i[style*="width:0%"] { border: 0; }
+.barra span { position: relative; padding: 0 8px; font-size: 12px; font-weight: 600; line-height: 24px; white-space: nowrap; }
+
 .sync-form { display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
 .proves { background: #E8590C; color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 700; opacity: 1; }
 .tabs { display: flex; gap: 2px; flex: 1; justify-content: center; }

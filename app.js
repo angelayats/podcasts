@@ -16,6 +16,10 @@ const ESTATS = [
 const MESOS = ['gener', 'febrer', 'març', 'abril', 'maig', 'juny', 'juliol', 'agost', 'setembre', 'octubre', 'novembre', 'desembre'];
 const DIES = ['Dl', 'Dt', 'Dc', 'Dj', 'Dv', 'Ds', 'Dg'];
 const DIES_LLARGS = ['dilluns', 'dimarts', 'dimecres', 'dijous', 'divendres', 'dissabte', 'diumenge'];
+const CHECKLIST = [
+  ['guio', 'Guió fet'], ['convidat', 'Convidat confirmat'], ['material', 'Material preparat'],
+  ['editat', 'Editat'], ['pujat', 'Pujat a la plataforma'],
+];
 const COLORS = ['#3D4B6B', '#B08D57', '#0CA678', '#D6336C', '#7048E8', '#1098AD', '#E8590C', '#5C7CFA'];
 
 const $ = (s) => document.querySelector(s);
@@ -95,6 +99,18 @@ const delDia = (ds) => visibles().filter((g) => g.data === ds).sort((a, b) => to
 const ordena = (a, b) => (a.data + a.hora).localeCompare(b.data + b.hora);
 const horari = (g) => `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}`;
 const equip = (g) => [...(g.presentadors || []).map(pers), pers(g.tecnic)].filter(Boolean).map((p) => p.nom);
+// Les persones poden ser de l'equip o convidats (tipus: 'convidat')
+const equipPers = () => state.persones.filter((p) => p.tipus !== 'convidat');
+const convidatsPers = () => state.persones.filter((p) => p.tipus === 'convidat').sort((a, b) => a.nom.localeCompare(b.nom, 'ca'));
+const nomsConvidats = (g) => {
+  const fitxes = (g.convidatsIds || []).map(pers).filter(Boolean).map((p) => p.nom);
+  return fitxes.length ? fitxes : (g.convidats ? [g.convidats] : []);
+};
+const checkFet = (g) => CHECKLIST.filter(([k]) => g.checklist?.[k]).length;
+const checkBadge = (g) => {
+  const n = checkFet(g);
+  return `<span class="chk ${n === CHECKLIST.length ? 'tot' : ''}" title="Checklist: ${n} de ${CHECKLIST.length}">✓ ${n}/${CHECKLIST.length}</span>`;
+};
 const coverProg = (p, cls = 'cover') => p?.imatge
   ? `<img class="${cls}" src="${esc(p.imatge)}" alt="" loading="lazy">`
   : `<span class="${cls}" style="--c:${p?.color || '#868E96'}"></span>`;
@@ -128,7 +144,8 @@ function card(g) {
       <div class="h">${horari(g)}${g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
       <div class="ti">${esc(g.titol)}</div>
       <div class="pr">${esc(progNom(g))}</div>
-      <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span>${noms.length ? `<span class="hint">${esc(noms.join(', '))}</span>` : ''}</div>
+      <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span>${g.estat !== 'cancellat' ? checkBadge(g) : ''}${noms.length ? `<span class="hint">${esc(noms.join(', '))}</span>` : ''}</div>
+      ${nomsConvidats(g).length ? `<div class="pr">Convidats: ${esc(nomsConvidats(g).join(', '))}</div>` : ''}
     </div>
   </button>`;
 }
@@ -215,7 +232,7 @@ function renderTaula() {
   const rows = visibles()
     .filter((g) => !ui.filtreEstat || g.estat === ui.filtreEstat)
     .filter((g) => !ui.nomesProperes || g.data >= avui)
-    .filter((g) => !q || [g.titol, g.convidats, g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
+    .filter((g) => !q || [g.titol, ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
     .sort(ordena);
   const t = $('#taula');
   if (!rows.length) {
@@ -225,7 +242,7 @@ function renderTaula() {
   }
   // Ordinador: taula
   const taula = `<div class="panel agenda-taula"><table>
-    <thead><tr><th>Data</th><th>Horari</th><th>Programa</th><th>Títol</th><th>Estudi</th><th>Equip</th><th>Convidats</th><th>Estat</th><th></th></tr></thead>
+    <thead><tr><th>Data</th><th>Horari</th><th>Programa</th><th>Títol</th><th>Estudi</th><th>Equip</th><th>Convidats</th><th>Feina</th><th>Estat</th><th></th></tr></thead>
     <tbody>${rows.map((g) => `<tr class="${g.estat === 'cancellat' ? 'cancel' : ''}">
       <td class="nowrap">${dataCurta(g.data)}</td>
       <td class="nowrap">${horari(g)}</td>
@@ -233,7 +250,8 @@ function renderTaula() {
       <td>${esc(g.titol)}</td>
       <td class="nowrap">${esc(g.estudi || '—')}</td>
       <td>${esc(equip(g).join(', ') || '—')}</td>
-      <td>${esc(g.convidats || '—')}</td>
+      <td>${esc(nomsConvidats(g).join(', ') || '—')}</td>
+      <td class="nowrap">${g.estat !== 'cancellat' ? checkBadge(g) : ''}</td>
       <td><select data-estat="${g.id}" aria-label="Estat">${estatOptions(g.estat)}</select></td>
       <td><button class="btn small" data-action="edita" data-id="${g.id}">Edita</button></td>
     </tr>`).join('')}</tbody></table></div>`;
@@ -264,7 +282,49 @@ function renderProgrames(m) {
             <button class="btn small" data-action="filtra-programa" data-id="${p.id}">Calendari</button></div>
         </div>
       </div>`;
-    }).join('') || '<p class="empty">Encara no hi ha programes. Crea el primer!</p>'}</div>`;
+    }).join('') || '<p class="empty">Encara no hi ha programes. Crea el primer!</p>'}</div>
+    ${estadistiques()}`;
+}
+
+/* ---------- Estadístiques ---------- */
+const GRAVADA = ['gravat', 'editat', 'publicat'];
+function estadistiques() {
+  const anys = [...new Set([new Date().getFullYear(), ...state.gravacions.map((g) => Number(g.data.slice(0, 4)))])].sort((a, b) => b - a);
+  const any = ui.anyStats || new Date().getFullYear();
+  const del = state.gravacions.filter((g) => g.data.startsWith(String(any)));
+  const gravades = del.filter((g) => GRAVADA.includes(g.estat));
+  const publicades = del.filter((g) => g.estat === 'publicat');
+  const perPublicar = state.gravacions.filter((g) => g.estat === 'gravat' || g.estat === 'editat');
+  const progs = [...state.programes, ...(del.some((g) => !prog(g.programaId)) ? [{ id: '', nom: 'Sense programa', color: '#868E96' }] : [])];
+  const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && Number(g.data.slice(5, 7)) === mes).length;
+  const max = Math.max(1, ...progs.flatMap((p) => [...Array(12)].map((_, i) => compta(gravades, p.id, i + 1))));
+
+  const files = [...Array(12)].map((_, i) => {
+    const mes = i + 1;
+    const total = compta(gravades, '', mes) + state.programes.reduce((s, p) => s + compta(gravades, p.id, mes), 0);
+    return `<tr class="${total ? '' : 'buit'}"><th>${cap(MESOS[i])}</th>${progs.map((p) => {
+      const gv = compta(gravades, p.id, mes), pb = compta(publicades, p.id, mes);
+      return `<td><div class="barra" style="--c:${p.color}"><i style="width:${(gv / max) * 100}%"></i><span>${gv ? `${gv} grav.${pb ? ` · ${pb} publ.` : ''}` : '—'}</span></div></td>`;
+    }).join('')}</tr>`;
+  }).join('');
+  const totals = `<tr class="total"><th>Total</th>${progs.map((p) => {
+    const gv = gravades.filter((g) => (g.programaId || '') === p.id).length, pb = publicades.filter((g) => (g.programaId || '') === p.id).length;
+    return `<td><b>${gv}</b> grav. · <b>${pb}</b> publ.</td>`;
+  }).join('')}</tr>`;
+
+  return `<div class="stats">
+    <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Estadístiques</h2></div>
+      <select data-filter="any" aria-label="Any" style="width:auto">${anys.map((a) => `<option ${a === any ? 'selected' : ''}>${a}</option>`).join('')}</select></div>
+    <div class="metrics">
+      <div class="metric"><span>Episodis gravats ${any}</span><b>${gravades.length}</b></div>
+      <div class="metric"><span>Publicats ${any}</span><b>${publicades.length}</b></div>
+      <div class="metric"><span>Pendents de publicar</span><b>${perPublicar.length}</b></div>
+    </div>
+    <div class="panel"><table class="taula-stats">
+      <thead><tr><th>Mes</th>${progs.map((p) => `<th><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</th>`).join('')}</tr></thead>
+      <tbody>${files}${totals}</tbody></table></div>
+    <p class="hint" style="margin-top:8px">«Gravats» compta els episodis en estat Gravat, Editat o Publicat. «Publicats», només els Publicats.</p>
+  </div>`;
 }
 
 // Redueix la imatge triada perquè ocupi poc espai
@@ -337,12 +397,17 @@ function openPrograma(p) {
 }
 
 /* ---------- Equip ---------- */
+const historial = (p) => state.gravacions
+  .filter((g) => (g.convidatsIds || []).includes(p.id) && g.estat !== 'cancellat')
+  .sort((a, b) => ordena(b, a));
+
 function renderPersones(m) {
   const avui = ymd(new Date());
+  const conv = convidatsPers();
   m.innerHTML = `
     <div class="toolbar"><div class="grp" style="width:auto"><h2 style="margin:0">Equip</h2></div>
       <button class="btn primary" data-action="nova-persona">+ Nova persona</button></div>
-    <div class="cards equip">${state.persones.map((p) => {
+    <div class="cards equip">${equipPers().map((p) => {
       const n = state.gravacions.filter((g) => g.data >= avui && g.estat !== 'cancellat' && (g.tecnic === p.id || (g.presentadors || []).includes(p.id))).length;
       return `<div class="item persona">
         <div class="avatar">${esc(inicials(p.nom))}</div>
@@ -352,20 +417,68 @@ function renderPersones(m) {
         </div>
         <button class="btn small" data-action="edita-persona" data-id="${p.id}">Edita</button>
       </div>`;
-    }).join('') || '<p class="empty">Encara no hi ha ningú. Afegeix presentadors, tècnics, productors…</p>'}</div>`;
+    }).join('') || '<p class="empty">Encara no hi ha ningú. Afegeix presentadors, tècnics, productors…</p>'}</div>
+
+    <div class="toolbar" style="margin-top:28px"><div class="grp" style="width:auto"><h2 style="margin:0">Convidats</h2></div>
+      <button class="btn primary" data-action="nou-convidat">+ Nou convidat</button></div>
+    ${conv.length > 6 ? `<div class="toolbar"><input type="search" id="cercaConv" placeholder="Cerca convidat…" value="${esc(ui.cercaConv || '')}" style="max-width:320px"></div>` : ''}
+    <div class="cards equip" id="llistaConv">${llistaConvidats()}</div>`;
 }
-function openPersona(p) {
+function llistaConvidats() {
+  const q = (ui.cercaConv || '').trim().toLowerCase();
+  const conv = convidatsPers().filter((p) => !q || [p.nom, p.notes, p.email].join(' ').toLowerCase().includes(q));
+  return conv.map((p) => {
+    const avui = ymd(new Date());
+    const h = historial(p);
+    const vingut = h.filter((g) => g.data <= avui);
+    const propera = h.filter((g) => g.data > avui).pop();
+    return `<div class="item persona">
+      <div class="avatar conv">${esc(inicials(p.nom))}</div>
+      <div class="in">
+        <h3>${esc(p.nom)}</h3>
+        <div class="sub">${vingut.length ? `Ha vingut ${vingut.length} ${vingut.length === 1 ? 'vegada' : 'vegades'} · última: ${dataCurta(vingut[0].data)} (${esc(progNom(vingut[0]))})` : 'Encara no ha vingut'}</div>
+        ${propera ? `<div class="sub">Propera: <b>${dataCurta(propera.data)}</b> (${esc(progNom(propera))})</div>` : ''}
+        <div class="sub contacte">
+          ${p.telefon ? `<a href="tel:${esc(p.telefon.replace(/\s+/g, ''))}">📞 ${esc(p.telefon)}</a>` : ''}
+          ${p.email ? `<a href="mailto:${esc(p.email)}">✉️ ${esc(p.email)}</a>` : ''}
+        </div>
+      </div>
+      <button class="btn small" data-action="edita-persona" data-id="${p.id}">Fitxa</button>
+    </div>`;
+  }).join('') || `<p class="empty">${q ? 'Cap convidat coincideix amb la cerca.' : 'Encara no hi ha cap convidat. Els pots crear aquí o directament des d\'una gravació.'}</p>`;
+}
+
+function openPersona(p, tipus) {
   const nou = !p;
-  p = p || { id: uid(), nom: '', rol: '' };
+  p = p || (tipus === 'convidat'
+    ? { id: uid(), nom: '', tipus: 'convidat', telefon: '', email: '', notes: '' }
+    : { id: uid(), nom: '', rol: '' });
+  const esConv = p.tipus === 'convidat';
+  const h = esConv && !nou ? historial(p) : [];
   openDialog(`
-    <h3>${nou ? 'Nova persona' : 'Edita persona'}</h3>
+    <h3>${nou ? (esConv ? 'Nou convidat' : 'Nova persona') : (esConv ? 'Fitxa del convidat' : 'Edita persona')}</h3>
     <label>Nom <input name="nom" value="${esc(p.nom)}" required></label>
-    <label>Rol <input name="rol" value="${esc(p.rol)}" placeholder="Presentació, tècnica de so, producció…"></label>`, {
+    ${esConv ? `
+      <div class="row">
+        <label>Telèfon <input type="tel" name="telefon" value="${esc(p.telefon)}" placeholder="600 000 000"></label>
+        <label>Correu <input type="email" name="email" value="${esc(p.email)}" placeholder="nom@exemple.com"></label>
+      </div>
+      <label>Notes <textarea name="notes" rows="3" placeholder="Temes, com el vam conèixer, preferències…">${esc(p.notes)}</textarea></label>
+      ${nou ? '' : `<fieldset><legend>Historial (${h.length})</legend>
+        ${h.length ? `<ul class="historial">${h.map((g) => `<li><button type="button" data-dlg="obre-grav" data-id="${g.id}">
+          <span class="dot" style="--c:${color(g)}"></span><b>${dataCurta(g.data)}</b> · ${esc(progNom(g))} · ${esc(g.titol)} <span class="badge ${g.estat}">${estatNom(g.estat)}</span></button></li>`).join('')}</ul>`
+          : '<span class="hint">Encara no ha participat en cap gravació.</span>'}
+      </fieldset>`}`
+    : `<label>Rol <input name="rol" value="${esc(p.rol)}" placeholder="Presentació, tècnica de so, producció…"></label>`}`, {
     onSave(f) {
       const nom = f.get('nom').trim();
       if (!nom) { toast('Cal posar un nom.'); return false; }
-      Object.assign(p, { nom, rol: f.get('rol').trim() });
+      if (esConv) Object.assign(p, { nom, telefon: f.get('telefon').trim(), email: f.get('email').trim(), notes: f.get('notes').trim() });
+      else Object.assign(p, { nom, rol: f.get('rol').trim() });
       if (nou) state.persones.push(p);
+      if (esConv) state.gravacions.forEach((g) => {   // manté al dia el text de convidats (per al calendari)
+        if ((g.convidatsIds || []).includes(p.id)) g.convidats = g.convidatsIds.map(pers).filter(Boolean).map((x) => x.nom).join(', ');
+      });
     },
     onDelete: nou ? null : () => {
       if (!confirm(`Eliminar ${p.nom}? Es traurà de totes les gravacions.`)) return false;
@@ -373,7 +486,17 @@ function openPersona(p) {
       state.gravacions.forEach((g) => {
         g.presentadors = (g.presentadors || []).filter((id) => id !== p.id);
         if (g.tecnic === p.id) g.tecnic = '';
+        if ((g.convidatsIds || []).includes(p.id)) {
+          g.convidatsIds = g.convidatsIds.filter((id) => id !== p.id);
+          g.convidats = g.convidatsIds.map(pers).filter(Boolean).map((x) => x.nom).join(', ');
+        }
       });
+    },
+    onExtra(a, b) {
+      if (a === 'obre-grav') {
+        const g = state.gravacions.find((x) => x.id === b.dataset.id);
+        if (g) { closeDialog(); openGravacio(g); }
+      }
     },
   });
 }
@@ -485,11 +608,18 @@ function openGravacio(g, dataPerDefecte) {
     </div>
     <label>Estudi <select name="estudi"><option value="">— Cap / fora d'estudi —</option>${estudis.map((s) => `<option ${s === g.estudi ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
     <fieldset><legend>Presenten / participen</legend>
-      ${state.persones.length ? `<div class="checks">${state.persones.map((p) => `<label><input type="checkbox" name="presentadors" value="${p.id}" ${(g.presentadors || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>`
+      ${equipPers().length ? `<div class="checks">${equipPers().map((p) => `<label><input type="checkbox" name="presentadors" value="${p.id}" ${(g.presentadors || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>`
         : '<span class="hint">Afegeix persones a la pestanya «Equip».</span>'}
     </fieldset>
-    <label>Tècnic/a <select name="tecnic"><option value="">—</option>${state.persones.map((p) => `<option value="${p.id}" ${p.id === g.tecnic ? 'selected' : ''}>${esc(p.nom)}${p.rol ? ' · ' + esc(p.rol) : ''}</option>`).join('')}</select></label>
-    <label>Convidats <input name="convidats" value="${esc(g.convidats)}" placeholder="Noms separats per comes"></label>
+    <label>Tècnic/a <select name="tecnic"><option value="">—</option>${equipPers().map((p) => `<option value="${p.id}" ${p.id === g.tecnic ? 'selected' : ''}>${esc(p.nom)}${p.rol ? ' · ' + esc(p.rol) : ''}</option>`).join('')}</select></label>
+    <fieldset><legend>Convidats</legend>
+      ${convidatsPers().length ? `<div class="checks">${convidatsPers().map((p) => `<label><input type="checkbox" name="convidatsIds" value="${p.id}" ${(g.convidatsIds || []).includes(p.id) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>` : ''}
+      <label style="margin-top:8px">Convidats nous
+        <input name="convidatsNous" value="${esc((g.convidatsIds || []).length ? '' : (g.convidats || ''))}" placeholder="Noms separats per comes (se'ls crearà la fitxa)"></label>
+    </fieldset>
+    <fieldset><legend>Checklist de l'episodi</legend>
+      <div class="checks">${CHECKLIST.map(([k, nom]) => `<label><input type="checkbox" name="checklist" value="${k}" ${g.checklist?.[k] ? 'checked' : ''}> ${nom}</label>`).join('')}</div>
+    </fieldset>
     <label>Notes <textarea name="notes" rows="3">${esc(g.notes)}</textarea></label>
     ${nou ? '<label>Repetir cada setmana <input type="number" inputmode="numeric" name="repeticions" min="0" max="52" value="0"><span class="hint">Nombre de setmanes addicionals (0 = només aquesta)</span></label>' : ''}
     <p class="warn" id="avis"></p>`, {
@@ -499,17 +629,29 @@ function openGravacio(g, dataPerDefecte) {
         titol: f.get('titol').trim(), programaId: f.get('programaId'), data: f.get('data'), hora: f.get('hora'),
         durada: Math.max(5, Number(f.get('durada')) || 60), estudi: f.get('estudi'), estat: f.get('estat'),
         presentadors: f.getAll('presentadors'), tecnic: f.get('tecnic'),
-        convidats: f.get('convidats').trim(), notes: f.get('notes').trim(),
+        notes: f.get('notes').trim(),
+        checklist: Object.fromEntries(f.getAll('checklist').map((k) => [k, true])),
       };
       if (!dades.titol || !dades.data || !dades.hora) { toast("Cal omplir el títol, la data i l'hora."); return false; }
       const reps = nou ? Math.min(52, Math.max(0, Number(f.get('repeticions')) || 0)) : 0;
-      const noves = [{ ...g, ...dades }];
-      for (let i = 1; i <= reps; i++) noves.push({ ...g, ...dades, id: uid(), data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
-      const xocs = noves.flatMap(conflictes);
+      const xocsPrevis = [{ ...g, ...dades }];
+      for (let i = 1; i <= reps; i++) xocsPrevis.push({ ...g, ...dades, id: 'x' + i, data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
+      const xocs = xocsPrevis.flatMap(conflictes);
       if (xocs.length) {
         const llista = [...new Set(xocs)].slice(0, 5).map((o) => `• ${dataCurta(o.data)} ${horari(o)} – ${progNom(o)}: ${o.titol}`).join('\n');
         if (!confirm(`Atenció: coincideix amb altres gravacions (mateix estudi o mateixa persona):\n\n${llista}\n\nVols desar-la igualment?`)) return false;
       }
+      // Convidats: els marcats + els nous (se'ls crea la fitxa, o es reaprofita si ja existeix amb el mateix nom)
+      const ids = f.getAll('convidatsIds');
+      String(f.get('convidatsNous') || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((nom) => {
+        let p = convidatsPers().find((x) => x.nom.toLowerCase() === nom.toLowerCase());
+        if (!p) { p = { id: uid(), nom, tipus: 'convidat', telefon: '', email: '', notes: '' }; state.persones.push(p); }
+        if (!ids.includes(p.id)) ids.push(p.id);
+      });
+      dades.convidatsIds = ids;
+      dades.convidats = ids.map(pers).filter(Boolean).map((p) => p.nom).join(', ');   // text per al calendari del iPhone
+      const noves = [{ ...g, ...dades }];
+      for (let i = 1; i <= reps; i++) noves.push({ ...g, ...dades, checklist: {}, id: uid(), data: ymd(addDays(parseYmd(dades.data), 7 * i)) });
       if (nou) state.gravacions.push(...noves);
       else Object.assign(g, dades);
       ui.diaSel = dades.data;
@@ -524,8 +666,9 @@ function openGravacio(g, dataPerDefecte) {
         closeDialog();
         openGravacio(null, g.data);
         const f = $('#dlgForm');
-        ['titol', 'programaId', 'hora', 'durada', 'estudi', 'tecnic', 'convidats', 'notes'].forEach((k) => { f.elements[k].value = g[k] ?? ''; });
+        ['titol', 'programaId', 'hora', 'durada', 'estudi', 'tecnic', 'notes'].forEach((k) => { f.elements[k].value = g[k] ?? ''; });
         f.querySelectorAll('input[name=presentadors]').forEach((c) => { c.checked = (g.presentadors || []).includes(c.value); });
+        f.querySelectorAll('input[name=convidatsIds]').forEach((c) => { c.checked = (g.convidatsIds || []).includes(c.value); });
         f.elements.titol.value = g.titol + ' (còpia)';
         f.dispatchEvent(new Event('change'));
       }
@@ -581,7 +724,7 @@ $('#dlgForm').addEventListener('click', (e) => {
     if (dlgHandlers.onDelete() === false) return;
     save(); closeDialog(); render(); return;
   }
-  dlgHandlers.onExtra?.(a);
+  dlgHandlers.onExtra?.(a, b);
 });
 // Tancar tocant fora del diàleg
 $('#dlg').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeDialog(); });
@@ -626,6 +769,7 @@ $('#main').addEventListener('click', (e) => {
     case 'edita-programa': return openPrograma(prog(id));
     case 'filtra-programa': ui.filtrePrograma = id; ui.view = 'calendari'; break;
     case 'nova-persona': return openPersona(null);
+    case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
     case 'treu-estudi': state.estudis.splice(Number(el.dataset.i), 1); save(); break;
     case 'exporta': return exporta();
@@ -656,10 +800,12 @@ $('#main').addEventListener('change', (e) => {
   if (f === 'programa') ui.filtrePrograma = t.value;
   if (f === 'estat') ui.filtreEstat = t.value;
   if (f === 'properes') ui.nomesProperes = t.checked;
+  if (f === 'any') { ui.anyStats = Number(t.value); render(); return; }
   ui.view === 'agenda' ? renderTaula() : render();
 });
 $('#main').addEventListener('input', (e) => {
   if (e.target.id === 'cerca') { ui.cerca = e.target.value; renderTaula(); }
+  if (e.target.id === 'cercaConv') { ui.cercaConv = e.target.value; $('#llistaConv').innerHTML = llistaConvidats(); }
 });
 mobil.addEventListener('change', render);
 
