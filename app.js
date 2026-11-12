@@ -116,6 +116,34 @@ const visibles = () => state.gravacions.filter((g) => !ui.filtrePrograma || g.pr
 const delDia = (ds) => visibles().filter((g) => g.data === ds).sort((a, b) => toMin(a.hora) - toMin(b.hora));
 // Emissions del dia (data d'emissió), separades de les gravacions
 const emDia = (ds) => (!ui.veureEmissions ? [] : visibles()).filter((g) => g.emissio === ds && g.estat !== 'cancellat').sort((a, b) => toMin(a.horaEmissio) - toMin(b.horaEmissio));
+// Festius de Catalunya + locals de Girona (Pasqua Granada i Sant Narcís)
+const festiusCache = {};
+function festiusAny(y) {
+  if (festiusCache[y]) return festiusCache[y];
+  // Diumenge de Pasqua (algorisme de Meeus/Butcher)
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+    g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4,
+    l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+    mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  const pasqua = new Date(y, mes - 1, dia);
+  const fx = { '01-01': 'Cap d\'Any', '01-06': 'Reis', '05-01': 'Festa del Treball', '06-24': 'Sant Joan', '08-15': 'L\'Assumpció',
+    '09-11': 'Diada Nacional de Catalunya', '10-12': 'Festa Nacional d\'Espanya', '10-29': 'Sant Narcís (Girona)', '11-01': 'Tots Sants',
+    '12-06': 'Dia de la Constitució', '12-08': 'La Immaculada', '12-25': 'Nadal', '12-26': 'Sant Esteve' };
+  const r = {};
+  Object.entries(fx).forEach(([md, nom]) => { r[`${y}-${md}`] = nom; });
+  r[ymd(addDays(pasqua, -2))] = 'Divendres Sant';
+  r[ymd(addDays(pasqua, 1))] = 'Dilluns de Pasqua';
+  r[ymd(addDays(pasqua, 50))] = 'Pasqua Granada (Girona)';
+  return (festiusCache[y] = r);
+}
+const festiu = (ds) => festiusAny(Number(ds.slice(0, 4)))[ds] || '';
+// Estat del dia per concertar: ocupat (hi ha gravació), festiu, lliure (feiner sense res) o res
+function estatDia(d, ds, avui) {
+  if (state.gravacions.some((g) => g.data === ds && g.estat !== 'cancellat')) return 'ocupat';
+  if (festiu(ds)) return 'festiu';
+  if (ds >= avui && d.getDay() % 6 !== 0) return 'lliure';
+  return '';
+}
 // Data de referència: la de gravació; si encara no en té, la d'emissió
 const dataRef = (g) => g.data || g.emissio || '';
 // Ordre: per data; els que encara no tenen data van al final, per número d'episodi
@@ -229,8 +257,10 @@ function renderCal(m) {
     for (let i = 0; i < weeks * 7; i++) {
       const d = addDays(start, i), ds = ymd(d), items = delDia(ds), ems = emDia(ds);
       const tots = [...items.map(chip), ...ems.map(chipEmissio)];
-      cells += `<div class="cell ${d.getMonth() !== c.getMonth() ? 'out' : ''} ${ds === avui ? 'today' : ''} ${ds === ui.diaSel ? 'sel' : ''}" data-action="dia" data-date="${ds}">
+      const fora = d.getMonth() !== c.getMonth(), est = fora ? '' : estatDia(d, ds, avui);
+      cells += `<div class="cell ${fora ? 'out' : est} ${ds === avui ? 'today' : ''} ${ds === ui.diaSel ? 'sel' : ''}" data-action="dia" data-date="${ds}">
         <div class="num">${d.getDate()}</div>
+        ${festiu(ds) && !fora ? `<div class="fest-nom">${esc(festiu(ds))}</div>` : ''}
         ${tots.slice(0, 3).join('')}
         ${tots.length > 3 ? `<button class="more" data-action="veure-setmana" data-date="${ds}">+${tots.length - 3} més</button>` : ''}
         <div class="dots">${items.slice(0, 4).map((g) => `<i style="--c:${color(g)}"></i>`).join('')}${ems.slice(0, 2).map((g) => `<i class="em" style="--c:${color(g)}"></i>`).join('')}</div>
@@ -239,7 +269,7 @@ function renderCal(m) {
     const sel = delDia(ui.diaSel), selEm = emDia(ui.diaSel);
     body = `<div class="month"><div class="dow">${DIES.map((d) => `<div>${d}</div>`).join('')}</div><div class="grid">${cells}</div></div>
       <div class="dia-sel dia-grup">
-        <h3 class="${ui.diaSel === avui ? 'avui' : ''}">${ui.diaSel === avui ? 'Avui · ' : ''}${dataLlarga(ui.diaSel)}</h3>
+        <h3 class="${ui.diaSel === avui ? 'avui' : ''}">${ui.diaSel === avui ? 'Avui · ' : ''}${dataLlarga(ui.diaSel)}${festiu(ui.diaSel) ? ` · <span class="fest-txt">Festiu: ${esc(festiu(ui.diaSel))}</span>` : ''}</h3>
         ${sel.map(card).join('') + selEm.map(cardEmissio).join('') || '<p class="empty">Cap gravació aquest dia.</p>'}
         <button class="add" style="width:100%" data-action="nova-dia" data-date="${ui.diaSel}">+ Afegir gravació</button>
       </div>`;
@@ -248,15 +278,17 @@ function renderCal(m) {
     titol = `${s.getDate()} ${MESOS[s.getMonth()].slice(0, 3)}. – ${e.getDate()} ${MESOS[e.getMonth()].slice(0, 3)}. ${e.getFullYear()}`;
     body = '<div class="week">' + [0, 1, 2, 3, 4, 5, 6].map((i) => {
       const d = addDays(s, i), ds = ymd(d), items = delDia(ds);
-      return `<section class="wday ${ds === avui ? 'today' : ''}">
+      return `<section class="wday ${ds === avui ? 'today' : ''} ${estatDia(d, ds, avui)}">
         <header data-action="nova-dia" data-date="${ds}"><span>${DIES_LLARGS[i]}</span><b>${d.getDate()}</b></header>
+        ${festiu(ds) ? `<div class="fest-nom">${esc(festiu(ds))}</div>` : ''}
         ${items.map(card).join('') + emDia(ds).map(cardEmissio).join('') || '<p class="empty">Cap gravació</p>'}
         <button class="add" data-action="nova-dia" data-date="${ds}">+ Afegir</button>
       </section>`;
     }).join('') + '</div>';
   }
 
-  const legend = state.programes.map((p) => `<span><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</span>`).join('');
+  const legend = state.programes.map((p) => `<span><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</span>`).join('')
+    + '<span class="llegenda-dies"><span class="caixa lliure"></span>Lliure <span class="caixa ocupat"></span>Gravació <span class="caixa festiu"></span>Festiu</span>';
   m.innerHTML = `
     <div class="toolbar">
       <div class="grp">

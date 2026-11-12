@@ -576,3 +576,17 @@ body.a-portada main { display: none; }
 .entra-esq { animation: entraEsq .22s ease-out; }
 .entra-dre { animation: entraDre .22s ease-out; }
 .month, .week { touch-action: pan-y; }
+
+/* Calendari de reserves: lliure (verd), gravació (blau), festiu (vermell), en to pastel */
+:root { --dia-lliure: #E7F5EA; --dia-ocupat: #E2EDFA; --dia-festiu: #FBE5E5; --festiu-text: #B24A4A; }
+@media (prefers-color-scheme: dark) { :root { --dia-lliure: #17291C; --dia-ocupat: #172434; --dia-festiu: #331B1B; --festiu-text: #F0A3A3; } }
+.cell.lliure, .wday.lliure, .caixa.lliure { background: var(--dia-lliure); }
+.cell.ocupat, .wday.ocupat, .caixa.ocupat { background: var(--dia-ocupat); }
+.cell.festiu, .wday.festiu, .caixa.festiu { background: var(--dia-festiu); }
+.cell.lliure:hover, .cell.ocupat:hover, .cell.festiu:hover { filter: brightness(.97); }
+.cell.festiu .num { color: var(--festiu-text); }
+.fest-nom { font-size: 11px; line-height: 1.2; color: var(--festiu-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fest-txt { color: var(--festiu-text); text-transform: none; letter-spacing: 0; }
+.llegenda-dies { display: inline-flex; align-items: center; gap: 6px; }
+.caixa { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); margin-left: 6px; vertical-align: middle; }
+@media (max-width: 760px) { .cell .fest-nom { display: none; } }
