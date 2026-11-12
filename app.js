@@ -951,7 +951,7 @@ function openGravacio(g, dataPerDefecte) {
   openDialog(`
     <h3>${nou ? 'Nova gravació' : 'Edita gravació'}</h3>
     <div class="row">
-      <label style="flex:3" class="no-dialeg"><span id="lblTitol">Títol o convidat</span> <input name="titol" value="${esc(g.titol)}" placeholder="Ex.: Entrevista a…"></label>
+      <label style="flex:3" class="no-dialeg"><span id="lblTitol">Títol o convidat</span> <input name="titol" value="${esc(g.titol)}" placeholder="Buit: el nom del convidat o «Sessió de gravació»"></label>
       <label style="flex:1">Núm. episodi <input type="number" inputmode="numeric" name="numero" min="0" value="${esc(g.numero ?? '')}"></label>
     </div>
     <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
@@ -1032,6 +1032,12 @@ function openGravacio(g, dataPerDefecte) {
         Object.assign(dades, m);
         if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
         else if (!dades.titol) dades.titol = m.tipusEp === 'sessio' ? SESSIO : m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
+      }
+      // Entrevista: sense títol (o amb «Sessió de gravació»), el títol és el nom del convidat; si encara no n'hi ha, «Sessió de gravació»
+      if (!musical && (!dades.titol || dades.titol === SESSIO)) {
+        const noms = [...f.getAll('convidatsIds').map(pers).filter(Boolean).map((p) => p.nom),
+          ...String(f.get('convidatsNous') || '').split(',').map((x) => x.trim()).filter(Boolean)];
+        dades.titol = noms.length ? [...new Set(noms)].join(', ') : SESSIO;
       }
       if (!dades.titol) { toast(musical ? 'Cal posar almenys els dos artistes.' : 'Cal posar un títol.'); return false; }
       if (!dades.data && !dades.emissio) { toast("Cal posar la data de gravació o la d'emissió."); return false; }
