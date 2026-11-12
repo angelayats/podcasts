@@ -707,11 +707,12 @@ function openPersona(p, tipus) {
       if (a === 'contacte') triaContacte();
       if (a === 'invitacio') {
         const f = $('#dlgForm').elements;
-        return openInvitacio({ nom: f.nom.value.trim() || p.nom, tel: f.telefon.value.trim(), email: f.email.value.trim(), p: nou ? null : p });
+        const nomP = f.nom.value.trim() || p.nom, ag = contacteAgenda(nomP);
+        return openInvitacio({ nom: nomP, tel: f.telefon.value.trim() || ag?.tels?.[0] || '', email: f.email.value.trim() || ag?.emails?.[0] || '', p: nou ? null : p });
       }
       if (a === 'whatsapp') {
         const f = $('#dlgForm').elements;
-        const enllac = waLink(f.telefon.value, missatgeConv({ ...p, nom: f.nom.value.trim() || p.nom }));
+        const enllac = waLink(f.telefon.value || contacteAgenda(f.nom.value.trim() || p.nom)?.tels?.[0], missatgeConv({ ...p, nom: f.nom.value.trim() || p.nom }));
         if (enllac) window.open(enllac, '_blank', 'noopener');
         else toast('Cal posar un telèfon mòbil vàlid.');
       }
@@ -1437,6 +1438,17 @@ T'envio la invitació amb tots els detalls.
 Si et ve de gust, respon-me amb un «sí, en parlem» i buscarem el dia que et vagi millor. Una abraçada!`;
 const modelInvitacio = () => state.plantilles?.invitacio || MODEL_INVITACIO;
 // Desa que s'ha invitat (si encara no té fitxa de convidat, se li crea com a potencial)
+// Busca una persona a l'agenda de Contactes pel nom (exacte, o el que contingui totes les paraules si n'hi ha només un)
+function contacteAgenda(nom) {
+  const q = clauCerca(nom), ll = state.agenda?.contactes || [];
+  if (!q) return null;
+  const exacte = ll.filter((c) => clauCerca(c.nom) === q);
+  if (exacte.length) return exacte[0];
+  const w = q.split(' ');
+  if (w.length < 2) return null;
+  const parcial = ll.filter((c) => { const n = clauCerca(c.nom).split(' '); return w.every((x) => n.includes(x)); });
+  return parcial.length === 1 ? parcial[0] : null;
+}
 function marcaInvitat(dest) {
   let p = dest.p || convidatPerNom().get(clauCerca(dest.nom));
   if (!p) { p = { id: uid(), nom: dest.nom, tipus: 'convidat', telefon: dest.tel || '', email: dest.email || '', notes: '', potencial: true }; state.persones.push(p); }
@@ -1451,7 +1463,7 @@ function openInvitacio(dest) {
   fetch(urlPdf).then((r) => r.blob()).then((b) => { fitxerPdf = new File([b], 'Invitació La cara oculta de la lluna.pdf', { type: 'application/pdf' }); }).catch(() => {});
   openDialog(`
     <h3>Invitació</h3>
-    <p class="hint" style="margin:-6px 0 0">Per a <b>${esc(dest.nom)}</b>${dest.tel ? ' · ' + esc(dest.tel) : ' · sense telèfon'}</p>
+    <p class="hint" style="margin:-6px 0 0">Per a <b>${esc(dest.nom)}</b>${dest.tel ? ' · ' + esc(dest.tel) : ' · <b>sense telèfon</b>: posa\'l a la fitxa o a Contactes'}</p>
     <label>Missatge <textarea name="missatge" rows="11">${esc(modelInvitacio().replaceAll('{nom}', nom1))}</textarea></label>
     <span class="hint">Pots canviar el text abans d'enviar-lo. <a href="#" data-dlg="inv-veure">📄 Mira la invitació</a></span>
     <div class="grp" style="width:auto">
@@ -1472,9 +1484,11 @@ function openInvitacio(dest) {
       }
       if (a === 'inv-pdf') {
         if (!fitxerPdf) return toast('La invitació encara s\'està carregant. Torna-ho a provar en un moment.');
-        const dades = { files: [fitxerPdf], text };
+        const dades = { files: [fitxerPdf] };
         if (!navigator.canShare?.(dades)) return toast('Aquest dispositiu no permet adjuntar fitxers. Fes servir «WhatsApp amb l\'enllaç».');
-        navigator.share(dades).then(() => { marcaInvitat(dest); toast('Invitació compartida.'); }).catch(() => {});
+        navigator.clipboard?.writeText(text).catch(() => {});
+        navigator.share(dades).then(() => { marcaInvitat(dest); toast('PDF enviat. El text del missatge està copiat: enganxa\'l al xat.'); }).catch(() => {});
+        toast('Tria WhatsApp i el contacte. El text del missatge ja està copiat per enganxar-lo.');
       }
       if (a === 'inv-veure') return obreVisorPdf(urlPdf, 'Invitació');
       if (a === 'inv-copia') navigator.clipboard?.writeText(text).then(() => toast('Text copiat.'), () => toast("No s'ha pogut copiar."));
@@ -1487,18 +1501,37 @@ function openInvitacio(dest) {
 }
 
 // Visor de PDF dins de l'app (amb botó per tancar). És un diàleg a part perquè quedi per sobre de l'altre.
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let pdfjsCarregat = null;
+const carregaPdfjs = () => pdfjsCarregat || (pdfjsCarregat = new Promise((ok, ko) => {
+  const sc = Object.assign(document.createElement('script'), { src: PDFJS + 'pdf.min.js', onload: () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); }, onerror: ko });
+  document.head.append(sc);
+}));
 function obreVisorPdf(url, titol) {
   let v = $('#visorPdf');
   if (!v) {
     v = Object.assign(document.createElement('dialog'), { id: 'visorPdf' });
-    v.innerHTML = '<div class="visor-cap"><b></b><button type="button" class="btn small">✕ Tanca</button></div><iframe title="PDF"></iframe>';
+    v.innerHTML = '<div class="visor-cap"><b></b><button type="button" class="btn small">✕ Tanca</button></div><div class="visor-pag"></div>';
     document.body.append(v);
     v.querySelector('button').onclick = () => v.close();
-    v.addEventListener('close', () => { v.querySelector('iframe').src = 'about:blank'; });
   }
   v.querySelector('b').textContent = titol;
-  v.querySelector('iframe').src = url;
+  const pag = v.querySelector('.visor-pag');
+  pag.innerHTML = '<p class="hint" style="padding:16px">Carregant…</p>';
   v.showModal();
+  carregaPdfjs().then(async (pdfjs) => {
+    const doc = await pdfjs.getDocument(url).promise;
+    pag.innerHTML = '';
+    const ample = pag.clientWidth - 16, dpr = Math.min(3, window.devicePixelRatio || 1);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const p = await doc.getPage(i);
+      const vp = p.getViewport({ scale: (ample / p.getViewport({ scale: 1 }).width) * dpr });
+      const cv = Object.assign(document.createElement('canvas'), { width: vp.width, height: vp.height });
+      cv.style.width = ample + 'px';
+      pag.append(cv);
+      await p.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    }
+  }).catch(() => { pag.innerHTML = `<p style="padding:16px">No s'ha pogut mostrar aquí. <a href="${esc(url)}">Obre el PDF</a></p>`; });
 }
 
 /* ---------- Imprimir llistats ---------- */
