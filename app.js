@@ -63,6 +63,7 @@ function normalize(d) {
     estudis: arr(d.estudis).filter((s) => typeof s === 'string'),
     ubicacions: d.ubicacions && typeof d.ubicacions === 'object' && !Array.isArray(d.ubicacions) ? d.ubicacions : {},
     agenda: { contactes: arr(d.agenda?.contactes), importat: d.agenda?.importat || '' },
+    plantilles: d.plantilles && typeof d.plantilles === 'object' ? d.plantilles : {},
     gravacions: arr(d.gravacions).map((g) => ({ presentadors: [], durada: 60, estat: 'pendent', ...g })),
   };
 }
@@ -662,6 +663,7 @@ function openPersona(p, tipus) {
         <label>Correu <input type="email" name="email" value="${esc(p.email)}" placeholder="nom@exemple.com"></label>
       </div>
       <div class="grp" style="width:auto">
+        <button type="button" class="btn small" data-dlg="invitacio">✉️ Envia la invitació</button>
         <button type="button" class="btn small" data-dlg="whatsapp">💬 Envia un WhatsApp</button>
         ${(state.estudis.filter(mapaEstudi).length ? state.estudis.filter(mapaEstudi) : ['']).map((e, i, ll) =>
           `<button type="button" class="btn small" data-dlg="ubicacio" data-estudi="${esc(e)}">📍 Envia la ubicació${ll.length > 1 ? ' · ' + esc(e) : ''}</button>`).join('')}
@@ -703,6 +705,10 @@ function openPersona(p, tipus) {
         if (g) { closeDialog(); openGravacio(g); }
       }
       if (a === 'contacte') triaContacte();
+      if (a === 'invitacio') {
+        const f = $('#dlgForm').elements;
+        return openInvitacio({ nom: f.nom.value.trim() || p.nom, tel: f.telefon.value.trim(), email: f.email.value.trim(), p: nou ? null : p });
+      }
       if (a === 'whatsapp') {
         const f = $('#dlgForm').elements;
         const enllac = waLink(f.telefon.value, missatgeConv({ ...p, nom: f.nom.value.trim() || p.nom }));
@@ -1314,7 +1320,8 @@ const convidatPerNom = () => new Map(convidatsPers().map((p) => [clauCerca(p.nom
 function relacioConvidat(p) {
   if (!p) return '';
   const fets = historial(p).filter((g) => jaGravada(g));
-  return fets.length ? `Ha vingut · ${fets.map((g) => (g.numero ? 'Ep. ' + g.numero : g.titol)).join(', ')}` : p.potencial ? 'Convidat potencial' : 'Ja és convidat';
+  return fets.length ? `Ha vingut · ${fets.map((g) => (g.numero ? 'Ep. ' + g.numero : g.titol)).join(', ')}`
+    : p.invitat ? `Invitat el ${dataCurta(p.invitat)}` : p.potencial ? 'Convidat potencial' : 'Ja és convidat';
 }
 function renderContactes(m) {
   const ag = state.agenda, n = ag.contactes.length;
@@ -1387,7 +1394,7 @@ function openContacte(c) {
     <fieldset class="llista-camps"><legend>Correus</legend><div id="campsMail">${camps('email', c.emails, 'email', 'correu@exemple.cat')}</div>
       <button type="button" class="btn small" data-dlg="mes-mail">+ Un altre correu</button></fieldset>
     <label>Notes <textarea name="notes" rows="3">${esc(c.notes || '')}</textarea></label>
-    ${nou ? '' : `<div class="grp" style="width:auto">${p ? '<button type="button" class="btn" data-dlg="fitxa">Obre la fitxa de convidat</button>'
+    ${nou ? '' : `<div class="grp" style="width:auto"><button type="button" class="btn primary" data-dlg="invitacio">✉️ Envia la invitació</button>${p ? '<button type="button" class="btn" data-dlg="fitxa">Obre la fitxa de convidat</button>'
       : '<button type="button" class="btn" data-dlg="proposa">➕ Proposa com a convidat</button>'}</div>`}
     ${nou ? '' : '<span class="hint">Els canvis que facis aquí es mantenen encara que tornis a importar l\'agenda.</span>'}`, {
     onSave(f) {
@@ -1408,11 +1415,71 @@ function openContacte(c) {
       if (a === 'mes-tel') $('#campsTel').insertAdjacentHTML('beforeend', '<input type="tel" name="tel" placeholder="Telèfon" autocomplete="off">');
       if (a === 'mes-mail') $('#campsMail').insertAdjacentHTML('beforeend', '<input type="email" name="email" placeholder="correu@exemple.cat" autocomplete="off">');
       if (a === 'fitxa') { closeDialog(); openPersona(p); }
+      if (a === 'invitacio') return openInvitacio({ nom: c.nom, tel: c.tels?.[0] || '', email: c.emails?.[0] || '', p });
       if (a === 'proposa') {
         const conv = { id: uid(), nom: c.nom, tipus: 'convidat', telefon: c.tels?.[0] || '', email: c.emails?.[0] || '', notes: c.empresa || '', potencial: true };
         state.persones.push(conv); save(); closeDialog(); render();
         toast(`${c.nom} ara és un convidat potencial.`);
         openPersona(conv);
+      }
+    },
+  });
+}
+
+/* ---------- Invitació a un convidat (La cara oculta de la lluna) ---------- */
+const PDF_INVITACIO = 'invitacio-la-cara-oculta.pdf';
+const MODEL_INVITACIO = `Hola {nom}! Soc l'Àngel Ayats, de «La cara oculta de la lluna», el podcast d'històries humanes de Girona FM. 🌙
+
+Ens faria molta il·lusió que fossis el protagonista d'un dels episodis: una conversa íntima i sense presses, guiada per quatre cançons que triïs tu. La gravació dura uns 50–60 minuts i es fa a l'Espai Podcast «Les Veus de la Vall», a Llorà.
+
+T'envio la invitació amb tots els detalls.
+
+Si et ve de gust, respon-me amb un «sí, en parlem» i buscarem el dia que et vagi millor. Una abraçada!`;
+const modelInvitacio = () => state.plantilles?.invitacio || MODEL_INVITACIO;
+// Desa que s'ha invitat (si encara no té fitxa de convidat, se li crea com a potencial)
+function marcaInvitat(dest) {
+  let p = dest.p || convidatPerNom().get(clauCerca(dest.nom));
+  if (!p) { p = { id: uid(), nom: dest.nom, tipus: 'convidat', telefon: dest.tel || '', email: dest.email || '', notes: '', potencial: true }; state.persones.push(p); }
+  p.invitat = ymd(new Date());
+  if (!p.telefon && dest.tel) p.telefon = dest.tel;
+  save();
+}
+function openInvitacio(dest) {
+  const nom1 = (dest.nom || '').split(' ')[0];
+  const urlPdf = new URL(PDF_INVITACIO, location.href).href;
+  let fitxerPdf = null;   // es prepara en obrir, perquè el iPhone el deixi compartir en tocar el botó
+  fetch(urlPdf).then((r) => r.blob()).then((b) => { fitxerPdf = new File([b], 'Invitació La cara oculta de la lluna.pdf', { type: 'application/pdf' }); }).catch(() => {});
+  openDialog(`
+    <h3>Invitació</h3>
+    <p class="hint" style="margin:-6px 0 0">Per a <b>${esc(dest.nom)}</b>${dest.tel ? ' · ' + esc(dest.tel) : ' · sense telèfon'}</p>
+    <label>Missatge <textarea name="missatge" rows="11">${esc(modelInvitacio().replaceAll('{nom}', nom1))}</textarea></label>
+    <span class="hint">Pots canviar el text abans d'enviar-lo. <a href="${esc(urlPdf)}" target="_blank" rel="noopener">📄 Mira la invitació</a></span>
+    <div class="grp" style="width:auto">
+      <button type="button" class="btn primary" data-dlg="inv-wa">💬 WhatsApp amb l'enllaç</button>
+      <button type="button" class="btn" data-dlg="inv-pdf">📎 Comparteix amb el PDF</button>
+      <button type="button" class="btn" data-dlg="inv-copia">📋 Copia el text</button>
+    </div>
+    <span class="hint"><b>WhatsApp amb l'enllaç</b> obre directament el xat d'aquesta persona. <b>Comparteix amb el PDF</b> adjunta el fitxer: tria WhatsApp i el contacte.</span>
+    <button type="button" class="btn small" data-dlg="inv-model" style="align-self:flex-start">Desa aquest text com a model</button>`, {
+    onSave() {},
+    onExtra(a) {
+      const text = $('#dlgForm').elements.missatge.value.trim();
+      if (a === 'inv-wa') {
+        const enllac = waLink(dest.tel, `${text}\n\n📄 Invitació: ${urlPdf}`);
+        if (!enllac) return toast('Cal un telèfon mòbil vàlid per enviar-ho per WhatsApp.');
+        window.open(enllac, '_blank', 'noopener');
+        marcaInvitat(dest); toast('Invitació preparada a WhatsApp.');
+      }
+      if (a === 'inv-pdf') {
+        if (!fitxerPdf) return toast('La invitació encara s\'està carregant. Torna-ho a provar en un moment.');
+        const dades = { files: [fitxerPdf], text };
+        if (!navigator.canShare?.(dades)) return toast('Aquest dispositiu no permet adjuntar fitxers. Fes servir «WhatsApp amb l\'enllaç».');
+        navigator.share(dades).then(() => { marcaInvitat(dest); toast('Invitació compartida.'); }).catch(() => {});
+      }
+      if (a === 'inv-copia') navigator.clipboard?.writeText(text).then(() => toast('Text copiat.'), () => toast("No s'ha pogut copiar."));
+      if (a === 'inv-model') {
+        state.plantilles = { ...(state.plantilles || {}), invitacio: nom1 ? text.replaceAll(nom1, '{nom}') : text };
+        save(); toast('Desat com a model per a les properes invitacions.');
       }
     },
   });

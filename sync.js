@@ -49,7 +49,7 @@ const Sync = (() => {
   function mapa() {
     const m = {};
     COLS.forEach((c) => state[c].forEach((r) => { m[c + ':' + r.id] = estable(r); }));
-    m['config:estudis'] = estable({ llista: state.estudis, ubicacions: state.ubicacions || {} });
+    m['config:estudis'] = estable({ llista: state.estudis, ubicacions: state.ubicacions || {}, ...(Object.keys(state.plantilles || {}).length ? { plantilles: state.plantilles } : {}) });
     if (state.agenda?.contactes?.length) m['config:agenda'] = estable(state.agenda);
     return m;
   }
@@ -87,8 +87,9 @@ const Sync = (() => {
       if (id !== 'estudis') return false;
       const nou = Array.isArray(dades.llista) ? dades.llista : [];
       const ub = dades.ubicacions && typeof dades.ubicacions === 'object' ? dades.ubicacions : {};
-      if (estable(nou) === estable(state.estudis) && estable(ub) === estable(state.ubicacions || {})) return false;
-      state.estudis = nou; state.ubicacions = ub; return true;
+      const pl = dades.plantilles && typeof dades.plantilles === 'object' ? dades.plantilles : {};
+      if (estable(nou) === estable(state.estudis) && estable(ub) === estable(state.ubicacions || {}) && estable(pl) === estable(state.plantilles || {})) return false;
+      state.estudis = nou; state.ubicacions = ub; state.plantilles = pl; return true;
     }
     if (!COLS.includes(col)) return false;
     const r = state[col].find((x) => x.id === id);
@@ -131,6 +132,7 @@ const Sync = (() => {
     if (est) {
       state.estudis = [...new Set([...(est.dades.llista || []), ...state.estudis])];
       state.ubicacions = { ...(state.ubicacions || {}), ...(est.dades.ubicacions || {}) };
+      state.plantilles = { ...(state.plantilles || {}), ...(est.dades.plantilles || {}) };
     }
   }
 
