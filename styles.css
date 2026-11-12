@@ -543,3 +543,11 @@ body:not(.a-portada) #splash { pointer-events: none; }
 }
 
 .llista-camps > div { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+
+/* Portada: el fons de tota la pàgina també és mig crema i mig negre, i no es desplaça.
+   Així el difuminat que el iPhone posa sota l'hora i la franja de baix no queden blanquinosos. */
+html:has(body.a-portada), body.a-portada {
+  background: linear-gradient(90deg, var(--cream) 50%, var(--ink) 50%) fixed;
+  overflow: hidden; height: 100%; overscroll-behavior: none;
+}
+body.a-portada main { display: none; }
