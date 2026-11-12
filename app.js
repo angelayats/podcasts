@@ -1315,6 +1315,25 @@ $('#main').addEventListener('input', (e) => {
 });
 mobil.addEventListener('change', render);
 
+// Calendari: lliscar el dit cap a l'esquerra o la dreta passa al mes (o setmana) següent o anterior
+let toc = null;
+$('#main').addEventListener('touchstart', (e) => {
+  toc = ui.view === 'calendari' && e.touches.length === 1 && e.target.closest('.month, .week')
+    ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+}, { passive: true });
+$('#main').addEventListener('touchend', (e) => {
+  if (!toc) return;
+  const dx = e.changedTouches[0].clientX - toc.x, dy = e.changedTouches[0].clientY - toc.y;
+  const rapid = Date.now() - toc.t < 700;
+  toc = null;
+  if (!rapid || Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;   // no és un lliscament horitzontal
+  const c = ui.cursor, enrere = dx > 0;
+  ui.cursor = ui.mode === 'mes' ? new Date(c.getFullYear(), c.getMonth() + (enrere ? -1 : 1), 1) : addDays(c, enrere ? -7 : 7);
+  render();
+  const cal = $('#main .month, #main .week');
+  if (cal) { cal.classList.add(enrere ? 'entra-esq' : 'entra-dre'); }
+});
+
 /* ---------- Contactes (la teva agenda, separada dels convidats) ---------- */
 const convidatPerNom = () => new Map(convidatsPers().map((p) => [clauCerca(p.nom), p]));
 function relacioConvidat(p) {

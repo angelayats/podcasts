@@ -569,3 +569,10 @@ body.a-portada main { display: none; }
   html { background: var(--head-bg); }
   body { min-height: 100dvh; }
 }
+
+/* Calendari: petita animació en lliscar d'un mes a l'altre */
+@keyframes entraEsq { from { transform: translateX(-24px); opacity: .4; } to { transform: none; opacity: 1; } }
+@keyframes entraDre { from { transform: translateX(24px); opacity: .4; } to { transform: none; opacity: 1; } }
+.entra-esq { animation: entraEsq .22s ease-out; }
+.entra-dre { animation: entraDre .22s ease-out; }
+.month, .week { touch-action: pan-y; }
