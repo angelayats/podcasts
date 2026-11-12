@@ -1460,7 +1460,7 @@ function openInvitacio(dest) {
   const nom1 = (dest.nom || '').split(' ')[0];
   const urlPdf = new URL(PDF_INVITACIO, location.href).href;
   let fitxerPdf = null;   // es prepara en obrir, perquè el iPhone el deixi compartir en tocar el botó
-  fetch(urlPdf).then((r) => r.blob()).then((b) => { fitxerPdf = new File([b], 'Invitació La cara oculta de la lluna.pdf', { type: 'application/pdf' }); }).catch(() => {});
+  fetch(urlPdf).then((r) => r.blob()).then((b) => { fitxerPdf = new File([b], 'Invitacio-La-cara-oculta-de-la-lluna.pdf', { type: 'application/pdf', lastModified: Date.now() }); }).catch(() => {});
   openDialog(`
     <h3>Invitació</h3>
     <p class="hint" style="margin:-6px 0 0">Per a <b>${esc(dest.nom)}</b>${dest.tel ? ' · ' + esc(dest.tel) : ' · <b>sense telèfon</b>: posa\'l a la fitxa o a Contactes'}</p>
@@ -1471,7 +1471,7 @@ function openInvitacio(dest) {
       <button type="button" class="btn" data-dlg="inv-pdf">📎 Comparteix amb el PDF</button>
       <button type="button" class="btn" data-dlg="inv-copia">📋 Copia el text</button>
     </div>
-    <span class="hint"><b>WhatsApp amb l'enllaç</b> obre directament el xat d'aquesta persona. <b>Comparteix amb el PDF</b> adjunta el fitxer: tria WhatsApp i el contacte.</span>
+    <span class="hint"><b>WhatsApp amb l'enllaç</b> (recomanat) obre directament el xat d'aquesta persona, amb el missatge i l'enllaç a la invitació. <b>Comparteix amb el PDF</b> adjunta el fitxer; si WhatsApp no el deixa enviar, tria <b>Desa a Arxius</b> i adjunta'l des del xat amb <b>+ → Document</b>.</span>
     <button type="button" class="btn small" data-dlg="inv-model" style="align-self:flex-start">Desa aquest text com a model</button>`, {
     onSave() {},
     onExtra(a) {
