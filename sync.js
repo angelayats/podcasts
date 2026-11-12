@@ -50,6 +50,7 @@ const Sync = (() => {
     const m = {};
     COLS.forEach((c) => state[c].forEach((r) => { m[c + ':' + r.id] = estable(r); }));
     m['config:estudis'] = estable({ llista: state.estudis, ubicacions: state.ubicacions || {} });
+    if (state.agenda?.contactes?.length) m['config:agenda'] = estable(state.agenda);
     return m;
   }
   function pendents() {
@@ -79,6 +80,10 @@ const Sync = (() => {
   /* ---------- Baixar canvis d'altres dispositius ---------- */
   function posa(col, id, dades) {
     if (col === 'config') {
+      if (id === 'agenda') {
+        if (estable(dades) === estable(state.agenda)) return false;
+        state.agenda = { contactes: Array.isArray(dades.contactes) ? dades.contactes : [], importat: dades.importat || '' }; return true;
+      }
       if (id !== 'estudis') return false;
       const nou = Array.isArray(dades.llista) ? dades.llista : [];
       const ub = dades.ubicacions && typeof dades.ubicacions === 'object' ? dades.ubicacions : {};

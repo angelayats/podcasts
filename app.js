@@ -52,7 +52,7 @@ function seed() {
       { id: angel, nom: 'Angel Ayats', rol: 'Producció i realització' },
       { id: david, nom: 'David Izquierdo', rol: 'Presentació' },
     ],
-    estudis: ['Estudi 1'], ubicacions: {},
+    estudis: ['Estudi 1'], ubicacions: {}, agenda: { contactes: [], importat: '' },
     gravacions: [],
   };
 }
@@ -62,6 +62,7 @@ function normalize(d) {
     programes: arr(d.programes), persones: arr(d.persones),
     estudis: arr(d.estudis).filter((s) => typeof s === 'string'),
     ubicacions: d.ubicacions && typeof d.ubicacions === 'object' && !Array.isArray(d.ubicacions) ? d.ubicacions : {},
+    agenda: { contactes: arr(d.agenda?.contactes), importat: d.agenda?.importat || '' },
     gravacions: arr(d.gravacions).map((g) => ({ presentadors: [], durada: 60, estat: 'pendent', ...g })),
   };
 }
@@ -89,12 +90,23 @@ save();
 function llegeixPref(k, def) { try { const v = localStorage.getItem('podcasts-pref-' + k); return v === null ? def : JSON.parse(v); } catch (e) { return def; } }
 function desaPref(k, v) { try { localStorage.setItem('podcasts-pref-' + k, JSON.stringify(v)); } catch (e) { /* no passa res */ } }
 const ui = {
-  view: 'calendari', mode: 'mes', cursor: new Date(), diaSel: ymd(new Date()),
+  view: 'portada', mode: 'mes', cursor: new Date(), diaSel: ymd(new Date()),
   filtrePrograma: '', filtreEstat: '', cerca: '', nomesProperes: true,
   veureEmissions: llegeixPref('veureEmissions', true), progStats: llegeixPref('progStats', ''), agendaTipus: llegeixPref('agendaTipus', 'gravacions'),
 };
 
 const prog = (id) => state.programes.find((p) => p.id === id);
+const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format ? p.format === 'musical' : /blanc/i.test(p.nom))); };
+// Quants artistes de cada costat té cada tipus d'episodi musical
+const TIPUS_EP = { dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
+// Artistes d'un episodi (dels camps nous; si encara no en té, de les notes antigues)
+const ARTISTA = /^(Clàssic|Contemporani):\s*(.+?)(?:\s+—\s+.*)?$/;
+function artistesDe(g) {
+  const camps = [...(g.classics || []), ...(g.contemporanis || [])].map((a) => a.artista).filter(Boolean);
+  if (camps.length) return camps;
+  return (g.notes || '').split('\n').map((l) => l.trim().match(ARTISTA)?.[2]).filter(Boolean);
+}
+const textMusica = (g) => [g.tema, ...[...(g.classics || []), ...(g.contemporanis || [])].flatMap((a) => [a.artista, a.disc])].filter(Boolean).join(' ');
 const pers = (id) => state.persones.find((p) => p.id === id);
 const color = (g) => prog(g.programaId)?.color || '#868E96';
 const progNom = (g) => prog(g.programaId)?.nom || 'Sense programa';
@@ -141,7 +153,12 @@ function estatOptions(sel, buit) {
 /* ---------- Render general ---------- */
 function render() {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === ui.view));
-  const views = { calendari: renderCal, agenda: renderAgenda, programes: renderProgrames, persones: renderPersones, config: renderConfig };
+  // Portada: la caràtula queda fixa, amb el menú a sota
+  const portada = ui.view === 'portada';
+  document.body.classList.toggle('a-portada', portada);
+  $('#splash').classList.toggle('fora', !portada);
+  document.documentElement.style.setProperty('--alt-cap', (document.querySelector('header')?.offsetHeight || 0) + 'px');
+  const views = { portada: (m) => { m.innerHTML = ''; }, calendari: renderCal, agenda: renderAgenda, programes: renderProgrames, persones: renderPersones, contactes: renderContactes, config: renderConfig };
   views[ui.view]($('#main'));
 }
 
@@ -271,7 +288,7 @@ function renderTaula() {
     .filter((g) => ui.agendaTipus === 'tots' || g.data)
     .filter((g) => !ui.filtreEstat || g.estat === ui.filtreEstat)
     .filter((g) => !ui.nomesProperes || !dataRef(g) || (g.data || '') >= avui || (g.emissio || '') >= avui)
-    .filter((g) => !q || [titolG(g), ...nomsConvidats(g), g.notes, g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
+    .filter((g) => !q || [titolG(g), ...nomsConvidats(g), g.notes, textMusica(g), g.estudi, progNom(g), ...equip(g)].join(' ').toLowerCase().includes(q))
     .sort(ordena);
   ui.filesAgenda = rows;
   const t = $('#taula');
@@ -331,18 +348,15 @@ function renderProgrames(m) {
 // Programa triat a les estadístiques ('' = tots)
 const progStats = () => (ui.progStats && prog(ui.progStats) ? ui.progStats : '');
 const delProg = (llista) => (progStats() ? llista.filter((g) => g.programaId === progStats()) : llista);
-// Un programa «de convidats» té episodis amb convidats; un «musical», episodis amb artistes a les notes
-const ARTISTA = /^(Clàssic|Contemporani):\s*(.+?)(?:\s+—\s+.*)?$/;
+// Un programa «de convidats» té episodis amb convidats; un «musical», episodis amb artistes
 const teConvidats = () => delProg(state.gravacions).some((g) => (g.convidatsIds || []).length) || (!progStats() && convidatsPers().length);
-const teArtistes = () => delProg(state.gravacions).some((g) => (g.notes || '').split('\n').some((l) => ARTISTA.test(l)));
+const teArtistes = () => delProg(state.gravacions).some((g) => artistesDe(g).length);
 // Artistes que surten als episodis: { nom, eps: [episodis] }
 function artistes(eps) {
   const m = new Map();
-  eps.forEach((g) => (g.notes || '').split('\n').forEach((l) => {
-    const x = l.trim().match(ARTISTA);
-    if (!x) return;
-    const k = clauCerca(x[2]);
-    if (!m.has(k)) m.set(k, { nom: x[2].trim(), eps: [] });
+  eps.forEach((g) => artistesDe(g).forEach((nom) => {
+    const k = clauCerca(nom);
+    if (!m.has(k)) m.set(k, { nom: nom.trim(), eps: [] });
     if (!m.get(k).eps.includes(g)) m.get(k).eps.push(g);
   }));
   return [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'ca'));
@@ -392,7 +406,7 @@ const filaArtista = (a) => `<button class="fila" data-action="edita" data-id="${
 function llistaStats() {
   const sel = ui.statsSel, q = clauCerca(ui.cercaStats);
   const coincideix = (txt) => !q || q.split(' ').every((w) => clauCerca(txt).includes(w));
-  const textEp = (g) => [titolG(g), g.notes, ...nomsConvidats(g), progNom(g)].join(' ');
+  const textEp = (g) => [titolG(g), g.notes, textMusica(g), ...nomsConvidats(g), progNom(g)].join(' ');
   if (!sel && !q) return '';
   let titol, eps = [], gent = [], arts = [];
   const grups = grupsStats();
@@ -512,6 +526,11 @@ function openPrograma(p) {
         <option value="podcast" ${p.tipus === 'podcast' ? 'selected' : ''}>Podcast</option></select></label>
       <label>Color al calendari <input type="color" name="color" value="${esc(p.color)}"></label>
     </div>
+    <div class="row">
+      <label>Format dels episodis <select name="format">
+        <option value="entrevista" ${!esMusical(p.id) ? 'selected' : ''}>Entrevista amb un convidat</option>
+        <option value="musical" ${esMusical(p.id) ? 'selected' : ''}>Musical (artistes i discos)</option></select></label>
+    </div>
     <fieldset><legend>Caràtula</legend>
       <div class="img-pick">
         <img class="prev" id="prevImg" src="${esc(imatge)}" alt="" ${imatge ? '' : 'style="visibility:hidden"'}>
@@ -525,7 +544,7 @@ function openPrograma(p) {
     onSave(f) {
       const nom = f.get('nom').trim();
       if (!nom) { toast('Cal posar un nom.'); return false; }
-      Object.assign(p, { nom, tipus: f.get('tipus'), color: f.get('color'), imatge });
+      Object.assign(p, { nom, tipus: f.get('tipus'), color: f.get('color'), imatge, format: f.get('format') });
       if (nou) state.programes.push(p);
     },
     onDelete: nou ? null : () => {
@@ -796,17 +815,20 @@ function llegeixVcard(text) {
     if (i < 0) continue;
     const cap = l.slice(0, i).toUpperCase(), valor = l.slice(i + 1);
     const prop = cap.split(';')[0].replace(/^ITEM\d+\./, '');
-    if (prop === 'BEGIN' && /VCARD/i.test(valor)) c = { nom: '', n: '', tels: [], email: '' };
+    if (prop === 'BEGIN' && /VCARD/i.test(valor)) c = { nom: '', n: '', tels: [], email: '', emails: [], empresa: '', notes: '' };
     else if (!c) continue;
     else if (prop === 'END') { out.push(c); c = null; }
     else if (prop === 'FN') c.nom = desescapa(valor);
     else if (prop === 'N') { const [cognom, nom] = valor.split(';').map(desescapa); c.n = [nom, cognom].filter(Boolean).join(' '); }
     else if (prop === 'TEL') c.tels.push({ v: desescapa(valor).replace(/^tel:/i, ''), mobil: /CELL|IPHONE|MOBILE/.test(cap), pref: /PREF/.test(cap) });
-    else if (prop === 'EMAIL' && !c.email) c.email = desescapa(valor);
+    else if (prop === 'EMAIL') { const e = desescapa(valor); if (!c.email) c.email = e; if (e && !c.emails.includes(e)) c.emails.push(e); }
+    else if (prop === 'ORG') c.empresa = desescapa(valor.split(';')[0]);
+    else if (prop === 'NOTE') c.notes = desescapa(valor);
   }
   return out.map((x) => {
     const tel = x.tels.find((t) => t.mobil) || x.tels.find((t) => t.pref) || x.tels[0];
-    return { nom: x.nom || x.n, telefon: tel?.v || '', email: x.email };
+    return { nom: x.nom || x.n || x.empresa, telefon: tel?.v || '', email: x.email,
+      tels: [...new Set([tel, ...x.tels].filter(Boolean).map((t) => t.v).filter(Boolean))], emails: x.emails, empresa: x.empresa, notes: x.notes };
   });
 }
 
@@ -922,10 +944,21 @@ function openGravacio(g, dataPerDefecte) {
   openDialog(`
     <h3>${nou ? 'Nova gravació' : 'Edita gravació'}</h3>
     <div class="row">
-      <label style="flex:3">Títol o convidat <input name="titol" value="${esc(g.titol)}" required placeholder="Ex.: Entrevista a…"></label>
+      <label style="flex:3" class="no-dialeg"><span id="lblTitol">Títol o convidat</span> <input name="titol" value="${esc(g.titol)}" placeholder="Ex.: Entrevista a…"></label>
       <label style="flex:1">Núm. episodi <input type="number" inputmode="numeric" name="numero" min="0" value="${esc(g.numero ?? '')}"></label>
     </div>
     <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
+    <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
+      <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || 'dialeg') === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
+      <label class="nomes-tematic">Tema <input name="tema" value="${esc(g.tema || '')}" placeholder="Ex.: Guitarres"></label>
+      <div class="musica-cols">${[['c', 'Clàssics', g.classics], ['k', 'Contemporanis / alternatius', g.contemporanis]].map(([pre, nom, llista]) => `
+        <div><h4>${nom}</h4>${[0, 1, 2, 3, 4].map((i) => `<div class="art-fila" data-i="${i}">
+          <input name="${pre}_art_${i}" value="${esc(llista?.[i]?.artista || '')}" placeholder="Artista" autocomplete="off">
+          <input name="${pre}_disc_${i}" value="${esc(llista?.[i]?.disc || '')}" placeholder="Disc" class="nomes-dialeg" autocomplete="off"></div>`).join('')}</div>`).join('')}
+      </div>
+      <button type="button" class="btn small nomes-pindola" data-dlg="omple-pindola">↺ Omple els clàssics amb els dels 4 diàlegs anteriors</button>
+      <span class="hint" id="previaTitol"></span>
+    </fieldset>
     <fieldset><legend>🎙️ Gravació</legend>
       <div class="row">
         <label>Data <input type="date" name="data" value="${esc(g.data)}"></label>
@@ -949,7 +982,7 @@ function openGravacio(g, dataPerDefecte) {
         : '<span class="hint">Afegeix persones a la pestanya «Equip».</span>'}
     </fieldset>
     <label>Tècnic/a <select name="tecnic"><option value="">—</option>${equipPers().map((p) => `<option value="${p.id}" ${p.id === g.tecnic ? 'selected' : ''}>${esc(p.nom)}${p.rol ? ' · ' + esc(p.rol) : ''}</option>`).join('')}</select></label>
-    <fieldset><legend>Convidats</legend>
+    <fieldset class="nomes-entrevista"><legend>Convidats</legend>
       ${(g.convidatsIds || []).map(pers).filter(Boolean).length ? `<div class="checks">${(g.convidatsIds || []).map(pers).filter(Boolean).map((p) => `<label><input type="checkbox" name="convidatsIds" value="${p.id}" checked> ${esc(p.nom)}</label>`).join('')}</div>` : ''}
       <label style="margin-top:8px">Afegeix convidats
         <input name="convidatsNous" list="llistaNomsConv" value="${esc((g.convidatsIds || []).length ? '' : (g.convidats || ''))}" placeholder="Escriu el nom (si ja té fitxa, s'hi enllaça)"></label>
@@ -985,7 +1018,15 @@ function openGravacio(g, dataPerDefecte) {
         notes: f.get('notes').trim(),
         checklist: Object.fromEntries(f.getAll('checklist').map((k) => [k, true])),
       };
-      if (!dades.titol) { toast('Cal posar un títol.'); return false; }
+      // Programa musical: tipus d'episodi, tema i artistes/discos; el títol d'un diàleg es fa sol
+      const musical = esMusical(dades.programaId);
+      if (musical) {
+        const m = llegeixMusica(f);
+        Object.assign(dades, m);
+        if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
+        else if (!dades.titol) dades.titol = m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
+      }
+      if (!dades.titol) { toast(musical ? 'Cal posar almenys els dos artistes.' : 'Cal posar un títol.'); return false; }
       if (!dades.data && !dades.emissio) { toast("Cal posar la data de gravació o la d'emissió."); return false; }
       const datesRep = nou && dades.data ? datesRepeticio(dades.data, f.get('repeteix'), f.get('finsA')) : [];
       if (nou && f.get('repeteix') && !datesRep.length) { toast('Tria fins a quin dia es repeteix.'); return false; }
@@ -996,8 +1037,8 @@ function openGravacio(g, dataPerDefecte) {
         if (!confirm(`Atenció: coincideix amb altres gravacions (mateix estudi o mateixa persona):\n\n${llista}\n\nVols desar-la igualment?`)) return false;
       }
       // Convidats: els marcats + els nous (se'ls crea la fitxa, o es reaprofita si ja existeix amb el mateix nom)
-      const ids = f.getAll('convidatsIds');
-      String(f.get('convidatsNous') || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((nom) => {
+      const ids = musical ? [] : f.getAll('convidatsIds');
+      String(musical ? '' : f.get('convidatsNous') || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((nom) => {
         let p = convidatsPers().find((x) => x.nom.toLowerCase() === nom.toLowerCase());
         if (!p) { p = { id: uid(), nom, tipus: 'convidat', telefon: '', email: '', notes: '' }; state.persones.push(p); }
         if (!ids.includes(p.id)) ids.push(p.id);
@@ -1022,6 +1063,7 @@ function openGravacio(g, dataPerDefecte) {
       toast(fora.size > 1 ? `S'han eliminat ${fora.size} sessions.` : 'Gravació eliminada.');
     },
     onExtra(action) {
+      if (action === 'omple-pindola') omplePindola($('#dlgForm'), g);
       if (action === 'copia') {
         const f = $('#dlgForm').elements;
         const dates = datesRepeticio(g.data, f.repeteix.value, f.finsA.value);
@@ -1048,6 +1090,7 @@ function openGravacio(g, dataPerDefecte) {
       presentadors: [...f.querySelectorAll('input[name=presentadors]:checked')].map((c) => c.value), tecnic: f.elements.tecnic.value };
     const x = prova.data && prova.hora ? conflictes(prova) : [];
     $('#avis').textContent = x.length ? `⚠ Coincideix amb: ${x.map((o) => `${horari(o)} ${progNom(o)} – ${o.titol}`).join('; ')}` : '';
+    actualitzaFormat(f);
     if (f.elements.repeteix) {
       const tipus = f.elements.repeteix.value, base = f.elements.data.value || g.data;
       $('#lblFins').textContent = tipus === 'un' ? 'Dia de la còpia' : 'Fins al';
@@ -1061,6 +1104,41 @@ function openGravacio(g, dataPerDefecte) {
   f.onchange = comprova;
   comprova();
   if (!mobil.matches && nou) f.elements.titol.focus();
+}
+
+/* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
+function llegeixMusica(f) {
+  const tipusEp = f.get('tipusEp') || 'dialeg', n = TIPUS_EP[tipusEp][1];
+  const llista = (pre) => [0, 1, 2, 3, 4].slice(0, n).map((i) => ({ artista: String(f.get(`${pre}_art_${i}`) || '').trim(), disc: tipusEp === 'dialeg' ? String(f.get(`${pre}_disc_${i}`) || '').trim() : '' }))
+    .filter((a) => a.artista).map((a) => (a.disc ? a : { artista: a.artista }));
+  return { tipusEp, tema: tipusEp === 'tematic' ? String(f.get('tema') || '').trim() : '', classics: llista('c'), contemporanis: llista('k') };
+}
+const titolDialeg = (m) => [m.classics[0]?.artista, m.contemporanis[0]?.artista].filter(Boolean).join(' - ');
+// Mostra o amaga parts del formulari segons el programa (entrevista / musical) i el tipus d'episodi
+function actualitzaFormat(f) {
+  if (!f.elements.tipusEp) return;
+  const musical = esMusical(f.elements.programaId.value), tipus = f.elements.tipusEp.value, n = TIPUS_EP[tipus][1];
+  const mostra = (sel, si) => f.querySelectorAll(sel).forEach((el) => { el.hidden = !si; });
+  mostra('.nomes-musical', musical);
+  mostra('.nomes-entrevista', !musical);
+  mostra('.nomes-dialeg', musical && tipus === 'dialeg');
+  mostra('.nomes-pindola', musical && tipus === 'pindola');
+  mostra('.nomes-tematic', musical && tipus === 'tematic');
+  mostra('.no-dialeg', !musical || tipus !== 'dialeg');
+  f.querySelectorAll('.art-fila').forEach((el) => { el.hidden = Number(el.dataset.i) >= n; });
+  $('#lblTitol').textContent = musical ? 'Títol (p. ex. Píndola resum 7)' : 'Títol o convidat';
+  const previa = $('#previaTitol');
+  if (previa) previa.textContent = musical && tipus === 'dialeg' ? `Títol: ${titolDialeg(llegeixMusica(new FormData(f))) || '— posa els dos artistes —'}` : '';
+}
+// Píndola resum: els clàssics són els dels 4 diàlegs anteriors del mateix programa
+function omplePindola(f, g) {
+  const num = Number(f.elements.numero.value) || Number(g.numero) || Infinity, pid = f.elements.programaId.value;
+  const anteriors = state.gravacions
+    .filter((x) => x.programaId === pid && x.id !== g.id && (x.tipusEp || 'dialeg') === 'dialeg' && Number(x.numero) < num && x.classics?.[0]?.artista)
+    .sort((a, b) => Number(a.numero) - Number(b.numero)).slice(-4);
+  if (!anteriors.length) { toast("No he trobat diàlegs anteriors. Posa primer el número d'episodi."); return; }
+  anteriors.forEach((x, i) => { f.elements[`c_art_${i}`].value = x.classics[0].artista; });
+  toast(`Clàssics dels episodis ${anteriors.map((x) => x.numero).join(', ')}.`);
 }
 
 /* ---------- Repeticions i còpies de sessions ---------- */
@@ -1172,6 +1250,8 @@ $('#main').addEventListener('click', (e) => {
     case 'edita-persona': return openPersona(pers(id));
     case 'escolta': return Reproductor.tria();
     case 'imprimeix': return imprimeixLlista(el.dataset.que);
+    case 'importa-agenda': return importaAgenda();
+    case 'contacte': { const c = state.agenda.contactes.find((x) => x.id === id); return c && openContacte(c); }
     case 'stats': {
       const nou = el.dataset.tipus ? { tipus: el.dataset.tipus, prog: el.dataset.prog, mes: Number(el.dataset.mes) || 0 } : null;
       const igual = nou && ui.statsSel && JSON.stringify(nou) === JSON.stringify(ui.statsSel);
@@ -1188,7 +1268,7 @@ $('#main').addEventListener('click', (e) => {
     case 'importa': return $('#fitxer').click();
     case 'esborra-tot':
       if (!confirm('Segur que vols esborrar TOTES les dades? Exporta-les abans si les vols conservar.')) return;
-      state = { programes: [], persones: [], estudis: [], ubicacions: {}, gravacions: [] }; save(); toast('Dades esborrades.'); break;
+      state = { programes: [], persones: [], estudis: [], ubicacions: {}, agenda: { contactes: [], importat: '' }, gravacions: [] }; save(); toast('Dades esborrades.'); break;
     case 'exemple':
       if (!confirm('Substituir les dades actuals per les inicials (els dos podcasts i l\'equip)?')) return;
       state = seed(); save(); break;
@@ -1217,6 +1297,7 @@ $('#main').addEventListener('change', (e) => {
 });
 $('#main').addEventListener('input', (e) => {
   if (e.target.id === 'cerca') { ui.cerca = e.target.value; renderTaula(); }
+  if (e.target.id === 'cercaCont') { ui.cercaCont = e.target.value; $('#llistaCont').innerHTML = llistaContactes(); }
   if (e.target.id === 'cercaStats') { ui.cercaStats = e.target.value; $('#statsLlista').innerHTML = llistaStats(); }
   if (e.target.id === 'cercaConv' || e.target.id === 'filtreConv') {
     ui[e.target.id] = e.target.value;
@@ -1226,6 +1307,84 @@ $('#main').addEventListener('input', (e) => {
   }
 });
 mobil.addEventListener('change', render);
+
+/* ---------- Contactes (la teva agenda, separada dels convidats) ---------- */
+const convidatPerNom = () => new Map(convidatsPers().map((p) => [clauCerca(p.nom), p]));
+function relacioConvidat(p) {
+  if (!p) return '';
+  const fets = historial(p).filter((g) => jaGravada(g));
+  return fets.length ? `Ha vingut · ${fets.map((g) => (g.numero ? 'Ep. ' + g.numero : g.titol)).join(', ')}` : p.potencial ? 'Convidat potencial' : 'Ja és convidat';
+}
+function renderContactes(m) {
+  const ag = state.agenda, n = ag.contactes.length;
+  m.innerHTML = `
+    ${n ? `<div class="cerca-fixa"><input type="search" id="cercaCont" placeholder="🔎 Cerca a l'agenda (nom, empresa, notes, telèfon)…" value="${esc(ui.cercaCont || '')}" autocomplete="off"></div>` : ''}
+    <div class="toolbar"><div class="grp" style="width:auto"><h2 style="margin:0">Contactes <span class="hint">(${n})</span></h2></div>
+      <button class="btn" data-action="importa-agenda">⬆ ${n ? 'Actualitza' : 'Importa'} l'agenda</button></div>
+    ${n ? `<p class="hint" style="margin-top:-6px">La teva agenda, importada el ${ag.importat ? dataCurta(ag.importat.slice(0, 10)) : '—'}. Toca un contacte per trucar, enviar un WhatsApp o proposar-lo com a convidat.</p>
+      <div class="panel llista-cont" id="llistaCont">${llistaContactes()}</div>`
+    : `<div class="panel" style="padding:18px"><p><b>Encara no has importat l'agenda.</b></p>
+      <p class="hint">1. Al iPhone, a l'app <b>Contactes</b>, toca <b>‹ Llistes</b>, mantén premut <b>Tots els contactes</b> i toca <b>Exporta → Desa a Arxius</b>.<br>
+      2. Aquí, toca <b>⬆ Importa l'agenda</b> i tria aquest fitxer (.vcf).<br>
+      L'agenda se sincronitza amb l'ordinador i és separada de les fitxes de convidats.</p></div>`}`;
+}
+function llistaContactes() {
+  const q = clauCerca(ui.cercaCont), conv = convidatPerNom();
+  const tots = state.agenda.contactes.filter((c) => !q || q.split(' ').every((w) => clauCerca([c.nom, c.empresa, c.notes, ...(c.tels || []), ...(c.emails || [])].join(' ')).includes(w)));
+  const mostra = tots.slice(0, 200);
+  return (mostra.map((c) => {
+    const rel = relacioConvidat(conv.get(clauCerca(c.nom)));
+    return `<button class="fila" data-action="contacte" data-id="${c.id}">
+      <span class="avatar conv mini">${esc(inicials(c.nom || '?'))}</span><b>${esc(c.nom)}</b>${rel ? `<span class="badge ${rel.startsWith('Ha vingut') ? 'publicat' : 'potencial'}">${esc(rel)}</span>` : ''}
+      <span class="det">${esc([c.empresa, c.tels?.[0]].filter(Boolean).join(' · ') || ' ')}</span></button>`;
+  }).join('') || `<p class="empty" style="padding:12px">Cap contacte coincideix amb «${esc(ui.cercaCont)}».</p>`)
+    + (tots.length > mostra.length ? `<p class="hint" style="padding:10px 12px">Es mostren 200 de ${tots.length}. Escriu al cercador per trobar-ne més.</p>` : '');
+}
+const inpAgenda = Object.assign(document.createElement('input'), { type: 'file', accept: '.vcf,text/vcard,text/x-vcard', hidden: true });
+document.body.append(inpAgenda);
+const importaAgenda = () => inpAgenda.click();
+inpAgenda.addEventListener('change', async () => {
+  const file = inpAgenda.files[0];
+  inpAgenda.value = '';
+  if (!file) return;
+  try {
+    const llista = llegeixVcard(await file.text()).filter((c) => c.nom);
+    if (!llista.length) return toast('Aquest fitxer no té cap contacte.');
+    const abans = state.agenda.contactes.length;
+    if (abans && !confirm(`Substituir els ${abans} contactes actuals per aquests ${llista.length}?\n\nLes fitxes de convidats no es toquen.`)) return;
+    state.agenda = {
+      importat: new Date().toISOString(),
+      contactes: llista.sort((a, b) => a.nom.localeCompare(b.nom, 'ca')).map((c, i) => ({
+        id: 'c' + i, nom: c.nom, empresa: c.empresa || '', tels: c.tels || [], emails: c.emails || [], notes: c.notes || '' })),
+    };
+    save(); render(); toast(`S'han importat ${llista.length} contactes.`);
+  } catch (err) { toast("No s'ha pogut llegir el fitxer de contactes."); }
+});
+function openContacte(c) {
+  const p = convidatPerNom().get(clauCerca(c.nom));
+  openDialog(`
+    <h3>${esc(c.nom)}</h3>
+    ${c.empresa ? `<p class="hint" style="margin:-6px 0 0">${esc(c.empresa)}</p>` : ''}
+    ${p ? `<p class="warn" style="background:var(--surface-2);color:var(--text)">🎙️ ${esc(relacioConvidat(p))}</p>` : ''}
+    <fieldset><legend>Telèfons</legend>${(c.tels || []).map((t) => `<div class="grp" style="width:auto;margin:4px 0">
+      <a class="btn small" href="tel:${esc(t.replace(/\s+/g, ''))}">📞 ${esc(t)}</a>
+      ${waLink(t) ? `<a class="btn small" href="${esc(waLink(t, 'Hola ' + (c.nom || '').split(' ')[0] + '!'))}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>`).join('') || '<span class="hint">Sense telèfon</span>'}</fieldset>
+    ${(c.emails || []).length ? `<fieldset><legend>Correu</legend>${c.emails.map((e) => `<a class="btn small" style="margin:4px 4px 4px 0" href="mailto:${esc(e)}">✉️ ${esc(e)}</a>`).join('')}</fieldset>` : ''}
+    ${c.notes ? `<fieldset><legend>Notes de l'agenda</legend><p style="margin:0;white-space:pre-wrap">${esc(c.notes)}</p></fieldset>` : ''}
+    <div class="grp" style="width:auto">${p ? '<button type="button" class="btn primary" data-dlg="fitxa">Obre la fitxa de convidat</button>'
+      : '<button type="button" class="btn primary" data-dlg="proposa">➕ Proposa com a convidat</button>'}</div>`, {
+    onSave() {},
+    onExtra(a) {
+      if (a === 'fitxa') { closeDialog(); openPersona(p); }
+      if (a === 'proposa') {
+        const nou = { id: uid(), nom: c.nom, tipus: 'convidat', telefon: c.tels?.[0] || '', email: c.emails?.[0] || '', notes: c.empresa || '', potencial: true };
+        state.persones.push(nou); save(); closeDialog(); render();
+        toast(`${c.nom} ara és un convidat potencial.`);
+        openPersona(nou);
+      }
+    },
+  });
+}
 
 /* ---------- Imprimir llistats ---------- */
 // Prepara una versió per al paper (taules en blanc i negre, amb casella i columna de notes) i obre la impressió
@@ -1326,7 +1485,8 @@ if (PROVES) {
   document.querySelector('.brand small').innerHTML = '<span class="proves">VERSIÓ DE PROVES</span>';
 }
 render();
-setTimeout(() => $('#splash').classList.add('fora'), 1100);
+// Tocar el logo de dalt torna a la portada
+document.querySelector('.brand').addEventListener('click', () => { ui.view = 'portada'; render(); window.scrollTo(0, 0); });
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

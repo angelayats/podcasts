@@ -514,3 +514,25 @@ body.amb-reproductor main { padding-bottom: 130px; }
   #zonaImpressio .c { width: 14px; text-align: center; }
   #zonaImpressio .n { width: 22%; }
 }
+
+/* ---------- Portada fixa ---------- */
+body.a-portada #splash { z-index: 25; }
+body.a-portada .nova { display: none; }
+body:not(.a-portada) #splash { pointer-events: none; }
+.brand { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+@media (min-width: 761px) { body.a-portada #splash { top: var(--alt-cap, 0px); } }
+
+/* ---------- Data i hora al iPhone: que no se solapin ---------- */
+#dlgForm .row > label { min-width: 0; }
+#dlgForm input[type=date], #dlgForm input[type=time] { min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; -webkit-appearance: none; appearance: none; min-height: 44px; }
+
+/* ---------- Episodi musical ---------- */
+.musica h4 { margin: 8px 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.musica-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.art-fila { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.art-fila[hidden], .musica [hidden], #dlgForm [hidden] { display: none !important; }
+#previaTitol { display: block; margin-top: 6px; font-weight: 600; color: var(--text); }
+@media (max-width: 520px) { .musica-cols { grid-template-columns: 1fr; } }
+
+/* ---------- Contactes ---------- */
+.llista-cont { max-height: none; }
