@@ -122,7 +122,7 @@ const clauOrdre = (g) => (dataRef(g) ? dataRef(g) + (g.data ? g.hora : g.horaEmi
 const ordena = (a, b) => { const x = clauOrdre(a), y = clauOrdre(b); return x < y ? -1 : x > y ? 1 : 0; };
 const horari = (g) => (g.data && g.hora ? `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}` : 'Sense data de gravació');
 const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
-const emissioText = (g) => (g.emissio ? `📻 Emissió: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
+const emissioText = (g) => (g.emissio ? `Emissió: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
 const GRAVADA = ['gravat', 'editat', 'publicat'];
 const jaGravada = (g, avui = ymd(new Date())) => GRAVADA.includes(g.estat) || Boolean(g.data && g.data <= avui);
 const equip = (g) => [...(g.presentadors || []).map(pers), pers(g.tecnic)].filter(Boolean).map((p) => p.nom);
@@ -166,18 +166,18 @@ function render() {
 /* ---------- Calendari ---------- */
 function chip(g) {
   return `<button class="chip ${g.estat === 'cancellat' ? 'cancel' : ''}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}"
-    title="${esc(`🎙️ Gravació ${horari(g)} · ${progNom(g)} · ${titolG(g)} · ${estatNom(g.estat)}`)}"><span class="t">🎙️ ${esc(g.hora)}</span> ${esc(g.titol)}</button>`;
+    title="${esc(`Gravació ${horari(g)} · ${progNom(g)} · ${titolG(g)} · ${estatNom(g.estat)}`)}"><span class="t">${esc(g.hora)}</span> ${esc(g.titol)}</button>`;
 }
 function chipEmissio(g) {
   return `<button class="chip emissio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}"
-    title="${esc(`📻 Emissió ${g.horaEmissio || ''} · ${progNom(g)} · ${titolG(g)} · ${estatNom(g.estat)}`)}"><span class="t">📻 ${esc(g.numero ? 'Ep.' + g.numero : g.horaEmissio || '')}</span> ${esc(g.titol)}</button>`;
+    title="${esc(`Emissió ${g.horaEmissio || ''} · ${progNom(g)} · ${titolG(g)} · ${estatNom(g.estat)}`)}"><span class="t">${esc(g.numero ? 'Ep.' + g.numero : g.horaEmissio || '')}</span> ${esc(g.titol)}</button>`;
 }
 function card(g) {
   const noms = equip(g);
   return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''} ${g.data ? 'gravacio' : 'nomes-emissio'}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
-      <div class="h">${g.data ? '🎙️ ' : ''}${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
+      <div class="h">${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
       <div class="ti">${esc(titolG(g))}</div>
       <div class="pr">${esc(progNom(g))}</div>
       ${g.emissio ? `<div class="pr">${esc(emissioText(g))}</div>` : ''}
@@ -191,7 +191,7 @@ function cardEmissio(g) {
   return `<button class="card emissio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
-      <div class="h">📻 Emissió${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}</div>
+      <div class="h">Emissió${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}</div>
       <div class="ti">${esc(titolG(g))}</div>
       <div class="pr">${esc(progNom(g))}</div>
       <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span></div>
@@ -241,8 +241,7 @@ function renderCal(m) {
     }).join('') + '</div>';
   }
 
-  const legend = state.programes.map((p) => `<span><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</span>`).join('')
-    + '<span>🎙️ Gravació</span><span>📻 Emissió</span>';
+  const legend = state.programes.map((p) => `<span><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</span>`).join('');
   m.innerHTML = `
     <div class="toolbar">
       <div class="grp">
@@ -273,7 +272,7 @@ function renderAgenda(m) {
         <select data-filter="programa" aria-label="Filtra per programa">${progOptions(ui.filtrePrograma, 'Tots els programes')}</select>
         <select data-filter="estat" aria-label="Filtra per estat">${estatOptions(ui.filtreEstat, 'Tots els estats')}</select>
         <select data-filter="tipus" aria-label="Què es mostra">
-          <option value="gravacions" ${ui.agendaTipus === 'gravacions' ? 'selected' : ''}>🎙️ Només gravacions</option>
+          <option value="gravacions" ${ui.agendaTipus === 'gravacions' ? 'selected' : ''}>Només gravacions</option>
           <option value="tots" ${ui.agendaTipus === 'tots' ? 'selected' : ''}>Gravacions i emissions</option></select>
         <label class="check"><input type="checkbox" data-filter="properes" ${ui.nomesProperes ? 'checked' : ''}> Només properes</label>
         <button class="btn" data-action="imprimeix" data-que="agenda">🖨 Imprimeix</button>
@@ -392,7 +391,7 @@ function grupsStats() {
 }
 const filaEpisodi = (g) => `<button class="fila" data-action="edita" data-id="${g.id}">
   <span class="dot" style="--c:${color(g)}"></span><b>${esc(titolG(g))}</b><span class="badge ${g.estat}">${estatNom(g.estat)}</span>
-  <span class="det">${esc(progNom(g))}${g.data ? ' · 🎙️ ' + dataCurta(g.data) : ''}${g.emissio ? ' · 📻 ' + dataCurta(g.emissio) : ''}${nomsConvidats(g).length && nomsConvidats(g).join(', ') !== g.titol ? ' · ' + esc(nomsConvidats(g).join(', ')) : ''}</span></button>`;
+  <span class="det">${esc(progNom(g))}${g.data ? ' · gravació ' + dataCurta(g.data) : ''}${g.emissio ? ' · emissió ' + dataCurta(g.emissio) : ''}${nomsConvidats(g).length && nomsConvidats(g).join(', ') !== g.titol ? ' · ' + esc(nomsConvidats(g).join(', ')) : ''}</span></button>`;
 const filaConvidat = (p) => {
   const h = historial(p), fets = h.filter((g) => jaGravada(g));
   return `<button class="fila" data-action="edita-persona" data-id="${p.id}">
@@ -673,7 +672,7 @@ function openPersona(p, tipus) {
       <label class="check"><input type="checkbox" name="potencial" ${p.potencial ? 'checked' : ''}> Convidat potencial (encara per confirmar)</label>
       ${nou ? '' : `<fieldset><legend>Historial (${h.length})</legend>
         ${h.length ? `<ul class="historial">${h.map((g) => `<li><button type="button" data-dlg="obre-grav" data-id="${g.id}">
-          <span class="dot" style="--c:${color(g)}"></span><b>${g.data ? '🎙️ ' + dataCurta(g.data) : '📻 ' + dataCurta(g.emissio)}</b> · ${esc(progNom(g))} · ${esc(titolG(g))} <span class="badge ${g.estat}">${estatNom(g.estat)}</span></button></li>`).join('')}</ul>`
+          <span class="dot" style="--c:${color(g)}"></span><b>${dataCurta(g.data || g.emissio)}</b> · ${esc(progNom(g))} · ${esc(titolG(g))} <span class="badge ${g.estat}">${estatNom(g.estat)}</span></button></li>`).join('')}</ul>`
           : '<span class="hint">Encara no ha participat en cap gravació.</span>'}
       </fieldset>`}`
     : `<label>Rol <input name="rol" value="${esc(p.rol)}" placeholder="Presentació, tècnica de so, producció…"></label>`}`, {
@@ -966,7 +965,7 @@ function openGravacio(g, dataPerDefecte) {
       <button type="button" class="btn small nomes-pindola" data-dlg="omple-pindola">↺ Omple els clàssics amb els dels 4 diàlegs anteriors</button>
       <span class="hint" id="previaTitol"></span>
     </fieldset>
-    <fieldset><legend>🎙️ Gravació</legend>
+    <fieldset><legend>Gravació</legend>
       <div class="row">
         <label>Data <input type="date" name="data" value="${esc(g.data)}"></label>
         <label>Hora d'inici <input type="time" name="hora" value="${esc(g.hora || '10:00')}"></label>
@@ -975,7 +974,7 @@ function openGravacio(g, dataPerDefecte) {
       </div>
       <span class="hint">Si encara no saps quan es gravarà, deixa la data buida.</span>
     </fieldset>
-    <fieldset><legend>📻 Emissió</legend>
+    <fieldset><legend>Emissió</legend>
       <div class="row">
         <label>Data d'emissió <input type="date" name="emissio" value="${esc(g.emissio || '')}"></label>
         <label>Hora <input type="time" name="horaEmissio" value="${esc(g.horaEmissio || '')}"></label>
@@ -1383,7 +1382,7 @@ function openContacte(c) {
   const camps = (nom, llista, tipus, ph) => [...(llista || []), ''].map((v) => `<input type="${tipus}" name="${nom}" value="${esc(v)}" placeholder="${ph}" autocomplete="off">`).join('');
   openDialog(`
     <h3>${nou ? 'Nou contacte' : 'Contacte'}</h3>
-    ${p ? `<p class="warn" style="background:var(--surface-2);color:var(--text)">🎙️ ${esc(relacioConvidat(p))}</p>` : ''}
+    ${p ? `<p class="warn" style="background:var(--surface-2);color:var(--text)">${esc(relacioConvidat(p))}</p>` : ''}
     ${nou || !(c.tels || []).length ? '' : `<div class="grp" style="width:auto">${c.tels.map((t) => `
       <a class="btn small" href="tel:${esc(t.replace(/\s+/g, ''))}">📞 ${esc(t)}</a>
       ${waLink(t) ? `<a class="btn small" href="${esc(waLink(t, 'Hola ' + (c.nom || '').split(' ')[0] + '!'))}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}`).join('')}
