@@ -99,7 +99,8 @@ const ui = {
 const prog = (id) => state.programes.find((p) => p.id === id);
 const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format ? p.format === 'musical' : /blanc/i.test(p.nom))); };
 // Quants artistes de cada costat té cada tipus d'episodi musical
-const TIPUS_EP = { dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
+const SESSIO = 'Sessió de gravació';
+const TIPUS_EP = { sessio: ['Sessió de gravació (sense episodi concret)', 0], dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
 // Artistes d'un episodi (dels camps nous; si encara no en té, de les notes antigues)
 const ARTISTA = /^(Clàssic|Contemporani):\s*(.+?)(?:\s+—\s+.*)?$/;
 function artistesDe(g) {
@@ -955,7 +956,7 @@ function openGravacio(g, dataPerDefecte) {
     </div>
     <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
     <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
-      <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || 'dialeg') === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
+      <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || (g.numero || g.classics?.length ? 'dialeg' : 'sessio')) === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
       <label class="nomes-tematic">Tema <input name="tema" value="${esc(g.tema || '')}" placeholder="Ex.: Guitarres"></label>
       <div class="musica-cols">${[['c', 'Clàssics', g.classics], ['k', 'Contemporanis / alternatius', g.contemporanis]].map(([pre, nom, llista]) => `
         <div><h4>${nom}</h4>${[0, 1, 2, 3, 4].map((i) => `<div class="art-fila" data-i="${i}">
@@ -1030,7 +1031,7 @@ function openGravacio(g, dataPerDefecte) {
         const m = llegeixMusica(f);
         Object.assign(dades, m);
         if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
-        else if (!dades.titol) dades.titol = m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
+        else if (!dades.titol) dades.titol = m.tipusEp === 'sessio' ? SESSIO : m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
       }
       if (!dades.titol) { toast(musical ? 'Cal posar almenys els dos artistes.' : 'Cal posar un títol.'); return false; }
       if (!dades.data && !dades.emissio) { toast("Cal posar la data de gravació o la d'emissió."); return false; }
@@ -1128,11 +1129,15 @@ function actualitzaFormat(f) {
   mostra('.nomes-musical', musical);
   mostra('.nomes-entrevista', !musical);
   mostra('.nomes-dialeg', musical && tipus === 'dialeg');
+  mostra('.musica-cols', musical && tipus !== 'sessio');
+  // Sessió de gravació: el títol s'omple sol (es pot canviar)
+  if (musical && tipus === 'sessio' && !f.elements.titol.value.trim()) f.elements.titol.value = SESSIO;
+  if (musical && tipus !== 'sessio' && f.elements.titol.value.trim() === SESSIO) f.elements.titol.value = '';
   mostra('.nomes-pindola', musical && tipus === 'pindola');
   mostra('.nomes-tematic', musical && tipus === 'tematic');
   mostra('.no-dialeg', !musical || tipus !== 'dialeg');
   f.querySelectorAll('.art-fila').forEach((el) => { el.hidden = Number(el.dataset.i) >= n; });
-  $('#lblTitol').textContent = musical ? 'Títol (p. ex. Píndola resum 7)' : 'Títol o convidat';
+  $('#lblTitol').textContent = !musical ? 'Títol o convidat' : tipus === 'sessio' ? 'Títol' : 'Títol (p. ex. Píndola resum 7)';
   const previa = $('#previaTitol');
   if (previa) previa.textContent = musical && tipus === 'dialeg' ? `Títol: ${titolDialeg(llegeixMusica(new FormData(f))) || '— posa els dos artistes —'}` : '';
 }
