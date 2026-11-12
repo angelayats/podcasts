@@ -178,7 +178,7 @@ function card(g) {
   return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''} ${g.data ? 'gravacio' : 'nomes-emissio'}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
-      <div class="h">${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
+      <div class="h">${g.data ? 'Sessió de gravació · ' : ''}${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
       <div class="ti">${esc(titolG(g))}</div>
       <div class="pr">${esc(progNom(g))}</div>
       ${g.emissio ? `<div class="pr">${esc(emissioText(g))}</div>` : ''}
