@@ -538,16 +538,27 @@ body:not(.a-portada) #splash { pointer-events: none; }
 .llista-cont { max-height: none; }
 /* Mòbil: a la portada només es veu el menú de baix (la capçalera queda transparent, per sobre de la caràtula) */
 @media (max-width: 760px) {
-  body.a-portada .top { z-index: 26; background: transparent; }
-  body.a-portada .top > :not(#tabs) { visibility: hidden; }
+  /* Portada al iPhone: una franja negra fina sota l'hora (sense boira) i la caràtula just a sota */
+  body.a-portada .top { z-index: 26; background: var(--head-bg); padding: var(--safe-t) 0 0; min-height: 0; }
+  body.a-portada .top > :not(#tabs) { display: none; }
+  body.a-portada #splash { top: var(--safe-t); }
 }
 
 .llista-camps > div { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 
 /* Portada: el fons de tota la pàgina també és mig crema i mig negre, i no es desplaça.
    Així el difuminat que el iPhone posa sota l'hora i la franja de baix no queden blanquinosos. */
+/* Fons negre: el iPhone pinta amb aquest color la zona de l'hora i la de sota del menú */
 html:has(body.a-portada), body.a-portada {
-  background: linear-gradient(90deg, var(--cream) 50%, var(--ink) 50%) fixed;
+  background: var(--ink);
   overflow: hidden; height: 100%; overscroll-behavior: none;
 }
 body.a-portada main { display: none; }
+
+/* ---------- Visor de PDF ---------- */
+#visorPdf { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--surface); }
+#visorPdf[open] { display: flex; flex-direction: column; }
+#visorPdf .visor-cap { display: flex; align-items: center; gap: 10px; padding: calc(10px + var(--safe-t)) 14px 10px; background: var(--head-bg); color: var(--head-text); }
+#visorPdf .visor-cap b { flex: 1; font-family: var(--font-title); letter-spacing: 1px; text-transform: uppercase; }
+#visorPdf .visor-cap .btn { background: var(--cream); color: var(--ink); border-color: var(--cream); }
+#visorPdf iframe { flex: 1; width: 100%; border: 0; background: #fff; }

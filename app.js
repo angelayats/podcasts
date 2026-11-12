@@ -1453,7 +1453,7 @@ function openInvitacio(dest) {
     <h3>Invitació</h3>
     <p class="hint" style="margin:-6px 0 0">Per a <b>${esc(dest.nom)}</b>${dest.tel ? ' · ' + esc(dest.tel) : ' · sense telèfon'}</p>
     <label>Missatge <textarea name="missatge" rows="11">${esc(modelInvitacio().replaceAll('{nom}', nom1))}</textarea></label>
-    <span class="hint">Pots canviar el text abans d'enviar-lo. <a href="${esc(urlPdf)}" target="_blank" rel="noopener">📄 Mira la invitació</a></span>
+    <span class="hint">Pots canviar el text abans d'enviar-lo. <a href="#" data-dlg="inv-veure">📄 Mira la invitació</a></span>
     <div class="grp" style="width:auto">
       <button type="button" class="btn primary" data-dlg="inv-wa">💬 WhatsApp amb l'enllaç</button>
       <button type="button" class="btn" data-dlg="inv-pdf">📎 Comparteix amb el PDF</button>
@@ -1476,6 +1476,7 @@ function openInvitacio(dest) {
         if (!navigator.canShare?.(dades)) return toast('Aquest dispositiu no permet adjuntar fitxers. Fes servir «WhatsApp amb l\'enllaç».');
         navigator.share(dades).then(() => { marcaInvitat(dest); toast('Invitació compartida.'); }).catch(() => {});
       }
+      if (a === 'inv-veure') return obreVisorPdf(urlPdf, 'Invitació');
       if (a === 'inv-copia') navigator.clipboard?.writeText(text).then(() => toast('Text copiat.'), () => toast("No s'ha pogut copiar."));
       if (a === 'inv-model') {
         state.plantilles = { ...(state.plantilles || {}), invitacio: nom1 ? text.replaceAll(nom1, '{nom}') : text };
@@ -1483,6 +1484,21 @@ function openInvitacio(dest) {
       }
     },
   });
+}
+
+// Visor de PDF dins de l'app (amb botó per tancar). És un diàleg a part perquè quedi per sobre de l'altre.
+function obreVisorPdf(url, titol) {
+  let v = $('#visorPdf');
+  if (!v) {
+    v = Object.assign(document.createElement('dialog'), { id: 'visorPdf' });
+    v.innerHTML = '<div class="visor-cap"><b></b><button type="button" class="btn small">✕ Tanca</button></div><iframe title="PDF"></iframe>';
+    document.body.append(v);
+    v.querySelector('button').onclick = () => v.close();
+    v.addEventListener('close', () => { v.querySelector('iframe').src = 'about:blank'; });
+  }
+  v.querySelector('b').textContent = titol;
+  v.querySelector('iframe').src = url;
+  v.showModal();
 }
 
 /* ---------- Imprimir llistats ---------- */
