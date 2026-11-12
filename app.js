@@ -123,7 +123,7 @@ const clauOrdre = (g) => (dataRef(g) ? dataRef(g) + (g.data ? g.hora : g.horaEmi
 const ordena = (a, b) => { const x = clauOrdre(a), y = clauOrdre(b); return x < y ? -1 : x > y ? 1 : 0; };
 const horari = (g) => (g.data && g.hora ? `${g.hora}–${fromMin(toMin(g.hora) + Number(g.durada || 0))}` : 'Sense data de gravació');
 const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
-const emissioText = (g) => (g.emissio ? `Emissió: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
+const emissioText = (g) => (g.emissio ? `Emissió Girona FM: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
 const GRAVADA = ['gravat', 'editat', 'publicat'];
 const jaGravada = (g, avui = ymd(new Date())) => GRAVADA.includes(g.estat) || Boolean(g.data && g.data <= avui);
 const equip = (g) => [...(g.presentadors || []).map(pers), pers(g.tecnic)].filter(Boolean).map((p) => p.nom);
@@ -192,7 +192,7 @@ function cardEmissio(g) {
   return `<button class="card emissio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
-      <div class="h">Emissió${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}</div>
+      <div class="h">Emissió Girona FM${g.horaEmissio ? ' · ' + esc(g.horaEmissio) : ''}</div>
       <div class="ti">${esc(titolG(g))}</div>
       <div class="pr">${esc(progNom(g))}</div>
       <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span></div>
