@@ -578,8 +578,8 @@ body.a-portada main { display: none; }
 .month, .week { touch-action: pan-y; }
 
 /* Calendari de reserves: lliure (verd), gravació (blau), festiu (vermell), en to pastel */
-:root { --dia-lliure: #E7F5EA; --dia-ocupat: #E2EDFA; --dia-festiu: #FBE5E5; --festiu-text: #B24A4A; }
-@media (prefers-color-scheme: dark) { :root { --dia-lliure: #17291C; --dia-ocupat: #172434; --dia-festiu: #331B1B; --festiu-text: #F0A3A3; } }
+:root { --dia-lliure: #D9F0DF; --dia-ocupat: #D6E5F7; --dia-festiu: #F8DADA; --festiu-text: #B24A4A; }
+@media (prefers-color-scheme: dark) { :root { --dia-lliure: #1B3322; --dia-ocupat: #1A2B40; --dia-festiu: #3D2020; --festiu-text: #F0A3A3; } }
 .cell.lliure, .wday.lliure, .caixa.lliure { background: var(--dia-lliure); }
 .cell.ocupat, .wday.ocupat, .caixa.ocupat { background: var(--dia-ocupat); }
 .cell.festiu, .wday.festiu, .caixa.festiu { background: var(--dia-festiu); }
