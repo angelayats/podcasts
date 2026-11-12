@@ -175,10 +175,24 @@ function chipEmissio(g) {
 }
 function card(g) {
   const noms = equip(g);
-  return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''} ${g.data ? 'gravacio' : 'nomes-emissio'}" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
+  // Sessió de gravació: hora, qui (o el programa si no té títol propi), programa i lloc. Sense dades d'emissió.
+  if (g.data) {
+    const titol = !g.titol || g.titol === SESSIO ? progNom(g) : g.titol;
+    return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''} gravacio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
     ${coverProg(prog(g.programaId))}
     <div class="body">
-      <div class="h">${g.data ? 'Sessió de gravació · ' : ''}${horari(g)}${g.data && g.estudi ? ' · ' + esc(g.estudi) : ''}</div>
+      <div class="h">${horari(g)} · Sessió de gravació</div>
+      <div class="ti">${esc(titol)}</div>
+      ${titol !== progNom(g) ? `<div class="pr">${esc(progNom(g))}</div>` : ''}
+      ${g.estudi ? `<div class="pr">${esc(g.estudi)}</div>` : ''}
+      <div class="meta"><span class="badge ${g.estat}">${estatNom(g.estat)}</span>${g.estat !== 'cancellat' ? checkBadge(g) : ''}${noms.length ? `<span class="hint">${esc(noms.join(', '))}</span>` : ''}</div>
+    </div>
+  </button>`;
+  }
+  return `<button class="card ${g.estat === 'cancellat' ? 'cancel' : ''} nomes-emissio" style="--c:${color(g)}" data-action="edita" data-id="${g.id}">
+    ${coverProg(prog(g.programaId))}
+    <div class="body">
+      <div class="h">${horari(g)}</div>
       <div class="ti">${esc(titolG(g))}</div>
       <div class="pr">${esc(progNom(g))}</div>
       ${g.emissio ? `<div class="pr">${esc(emissioText(g))}</div>` : ''}
