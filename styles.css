@@ -541,3 +541,5 @@ body:not(.a-portada) #splash { pointer-events: none; }
   body.a-portada .top { z-index: 26; background: transparent; }
   body.a-portada .top > :not(#tabs) { visibility: hidden; }
 }
+
+.llista-camps > div { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }

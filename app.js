@@ -1251,6 +1251,7 @@ $('#main').addEventListener('click', (e) => {
     case 'escolta': return Reproductor.tria();
     case 'imprimeix': return imprimeixLlista(el.dataset.que);
     case 'importa-agenda': return importaAgenda();
+    case 'nou-contacte': return openContacte(null);
     case 'contacte': { const c = state.agenda.contactes.find((x) => x.id === id); return c && openContacte(c); }
     case 'stats': {
       const nou = el.dataset.tipus ? { tipus: el.dataset.tipus, prog: el.dataset.prog, mes: Number(el.dataset.mes) || 0 } : null;
@@ -1320,7 +1321,8 @@ function renderContactes(m) {
   m.innerHTML = `
     ${n ? `<div class="cerca-fixa"><input type="search" id="cercaCont" placeholder="🔎 Cerca a l'agenda (nom, empresa, notes, telèfon)…" value="${esc(ui.cercaCont || '')}" autocomplete="off"></div>` : ''}
     <div class="toolbar"><div class="grp" style="width:auto"><h2 style="margin:0">Contactes <span class="hint">(${n})</span></h2></div>
-      <button class="btn" data-action="importa-agenda">⬆ ${n ? 'Actualitza' : 'Importa'} l'agenda</button></div>
+      <div class="grp" style="width:auto"><button class="btn" data-action="importa-agenda">⬆ ${n ? 'Actualitza' : 'Importa'} l'agenda</button>
+      ${n ? '<button class="btn primary" data-action="nou-contacte">+ Nou</button>' : ''}</div></div>
     ${n ? `<p class="hint" style="margin-top:-6px">La teva agenda, importada el ${ag.importat ? dataCurta(ag.importat.slice(0, 10)) : '—'}. Toca un contacte per trucar, enviar un WhatsApp o proposar-lo com a convidat.</p>
       <div class="panel llista-cont" id="llistaCont">${llistaContactes()}</div>`
     : `<div class="panel" style="padding:18px"><p><b>Encara no has importat l'agenda.</b></p>
@@ -1351,36 +1353,66 @@ inpAgenda.addEventListener('change', async () => {
     const llista = llegeixVcard(await file.text()).filter((c) => c.nom);
     if (!llista.length) return toast('Aquest fitxer no té cap contacte.');
     const abans = state.agenda.contactes.length;
-    if (abans && !confirm(`Substituir els ${abans} contactes actuals per aquests ${llista.length}?\n\nLes fitxes de convidats no es toquen.`)) return;
+    const editats = state.agenda.contactes.filter((c) => c.editat);
+    if (abans && !confirm(`Actualitzar l'agenda amb aquests ${llista.length} contactes?${editats.length ? `\n\nEs mantenen els ${editats.length} contactes que has editat o creat a l'app.` : ''}\nLes fitxes de convidats no es toquen.`)) return;
+    const perNom = new Map(editats.map((c) => [clauCerca(c.nomOriginal || c.nom), c]));
+    const importats = llista.map((c) => {
+      const ed = perNom.get(clauCerca(c.nom));
+      if (ed) { perNom.delete(clauCerca(c.nom)); return ed; }
+      return { nom: c.nom, empresa: c.empresa || '', tels: c.tels || [], emails: c.emails || [], notes: c.notes || '' };
+    });
     state.agenda = {
       importat: new Date().toISOString(),
-      contactes: llista.sort((a, b) => a.nom.localeCompare(b.nom, 'ca')).map((c, i) => ({
-        id: 'c' + i, nom: c.nom, empresa: c.empresa || '', tels: c.tels || [], emails: c.emails || [], notes: c.notes || '' })),
+      contactes: [...importats, ...perNom.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'ca')).map((c, i) => ({ ...c, id: 'c' + i })),
     };
     save(); render(); toast(`S'han importat ${llista.length} contactes.`);
   } catch (err) { toast("No s'ha pogut llegir el fitxer de contactes."); }
 });
 function openContacte(c) {
-  const p = convidatPerNom().get(clauCerca(c.nom));
+  const nou = !c;
+  c = c || { id: uid(), nom: '', empresa: '', tels: [], emails: [], notes: '' };
+  const p = nou ? null : convidatPerNom().get(clauCerca(c.nom));
+  const camps = (nom, llista, tipus, ph) => [...(llista || []), ''].map((v) => `<input type="${tipus}" name="${nom}" value="${esc(v)}" placeholder="${ph}" autocomplete="off">`).join('');
   openDialog(`
-    <h3>${esc(c.nom)}</h3>
-    ${c.empresa ? `<p class="hint" style="margin:-6px 0 0">${esc(c.empresa)}</p>` : ''}
+    <h3>${nou ? 'Nou contacte' : 'Contacte'}</h3>
     ${p ? `<p class="warn" style="background:var(--surface-2);color:var(--text)">🎙️ ${esc(relacioConvidat(p))}</p>` : ''}
-    <fieldset><legend>Telèfons</legend>${(c.tels || []).map((t) => `<div class="grp" style="width:auto;margin:4px 0">
+    ${nou || !(c.tels || []).length ? '' : `<div class="grp" style="width:auto">${c.tels.map((t) => `
       <a class="btn small" href="tel:${esc(t.replace(/\s+/g, ''))}">📞 ${esc(t)}</a>
-      ${waLink(t) ? `<a class="btn small" href="${esc(waLink(t, 'Hola ' + (c.nom || '').split(' ')[0] + '!'))}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}</div>`).join('') || '<span class="hint">Sense telèfon</span>'}</fieldset>
-    ${(c.emails || []).length ? `<fieldset><legend>Correu</legend>${c.emails.map((e) => `<a class="btn small" style="margin:4px 4px 4px 0" href="mailto:${esc(e)}">✉️ ${esc(e)}</a>`).join('')}</fieldset>` : ''}
-    ${c.notes ? `<fieldset><legend>Notes de l'agenda</legend><p style="margin:0;white-space:pre-wrap">${esc(c.notes)}</p></fieldset>` : ''}
-    <div class="grp" style="width:auto">${p ? '<button type="button" class="btn primary" data-dlg="fitxa">Obre la fitxa de convidat</button>'
-      : '<button type="button" class="btn primary" data-dlg="proposa">➕ Proposa com a convidat</button>'}</div>`, {
-    onSave() {},
+      ${waLink(t) ? `<a class="btn small" href="${esc(waLink(t, 'Hola ' + (c.nom || '').split(' ')[0] + '!'))}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}`).join('')}
+      ${(c.emails || []).map((e) => `<a class="btn small" href="mailto:${esc(e)}">✉️ ${esc(e)}</a>`).join('')}</div>`}
+    <label>Nom <input name="nom" value="${esc(c.nom)}" required autocomplete="off"></label>
+    <label>Empresa / mitjà <input name="empresa" value="${esc(c.empresa || '')}" autocomplete="off"></label>
+    <fieldset class="llista-camps"><legend>Telèfons</legend><div id="campsTel">${camps('tel', c.tels, 'tel', 'Telèfon')}</div>
+      <button type="button" class="btn small" data-dlg="mes-tel">+ Un altre telèfon</button></fieldset>
+    <fieldset class="llista-camps"><legend>Correus</legend><div id="campsMail">${camps('email', c.emails, 'email', 'correu@exemple.cat')}</div>
+      <button type="button" class="btn small" data-dlg="mes-mail">+ Un altre correu</button></fieldset>
+    <label>Notes <textarea name="notes" rows="3">${esc(c.notes || '')}</textarea></label>
+    ${nou ? '' : `<div class="grp" style="width:auto">${p ? '<button type="button" class="btn" data-dlg="fitxa">Obre la fitxa de convidat</button>'
+      : '<button type="button" class="btn" data-dlg="proposa">➕ Proposa com a convidat</button>'}</div>`}
+    ${nou ? '' : '<span class="hint">Els canvis que facis aquí es mantenen encara que tornis a importar l\'agenda.</span>'}`, {
+    onSave(f) {
+      const nom = f.get('nom').trim();
+      if (!nom) { toast('Cal posar un nom.'); return false; }
+      const nets = (k) => [...new Set(f.getAll(k).map((v) => String(v).trim()).filter(Boolean))];
+      Object.assign(c, { nom, empresa: f.get('empresa').trim(), tels: nets('tel'), emails: nets('email'), notes: f.get('notes').trim(),
+        editat: true, nomOriginal: c.nomOriginal || (nou ? nom : c.nom) });
+      if (nou) state.agenda.contactes.push(c);
+      state.agenda.contactes.sort((x, y) => x.nom.localeCompare(y.nom, 'ca'));
+      toast(nou ? 'Contacte creat.' : 'Contacte desat.');
+    },
+    onDelete: nou ? null : () => {
+      if (!confirm(`Eliminar ${c.nom} de l'agenda de l'app?\n\nNomés s'esborra d'aquí, no del teu iPhone. Si tornes a importar l'agenda, tornarà a aparèixer.`)) return false;
+      state.agenda.contactes = state.agenda.contactes.filter((x) => x !== c);
+    },
     onExtra(a) {
+      if (a === 'mes-tel') $('#campsTel').insertAdjacentHTML('beforeend', '<input type="tel" name="tel" placeholder="Telèfon" autocomplete="off">');
+      if (a === 'mes-mail') $('#campsMail').insertAdjacentHTML('beforeend', '<input type="email" name="email" placeholder="correu@exemple.cat" autocomplete="off">');
       if (a === 'fitxa') { closeDialog(); openPersona(p); }
       if (a === 'proposa') {
-        const nou = { id: uid(), nom: c.nom, tipus: 'convidat', telefon: c.tels?.[0] || '', email: c.emails?.[0] || '', notes: c.empresa || '', potencial: true };
-        state.persones.push(nou); save(); closeDialog(); render();
+        const conv = { id: uid(), nom: c.nom, tipus: 'convidat', telefon: c.tels?.[0] || '', email: c.emails?.[0] || '', notes: c.empresa || '', potencial: true };
+        state.persones.push(conv); save(); closeDialog(); render();
         toast(`${c.nom} ara és un convidat potencial.`);
-        openPersona(nou);
+        openPersona(conv);
       }
     },
   });
