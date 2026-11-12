@@ -536,3 +536,8 @@ body:not(.a-portada) #splash { pointer-events: none; }
 
 /* ---------- Contactes ---------- */
 .llista-cont { max-height: none; }
+/* Mòbil: a la portada només es veu el menú de baix (la capçalera queda transparent, per sobre de la caràtula) */
+@media (max-width: 760px) {
+  body.a-portada .top { z-index: 26; background: transparent; }
+  body.a-portada .top > :not(#tabs) { visibility: hidden; }
+}

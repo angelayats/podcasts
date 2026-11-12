@@ -1,6 +1,6 @@
 // Service worker: permet obrir l'app sense connexió i instal·lar-la.
 // Quan canviïs fitxers de l'app, puja el número de VERSIO perquè els dispositius s'actualitzin.
-const VERSIO = 'podcasts-v32';
+const VERSIO = 'podcasts-v33';
 const FITXERS = [
   './', 'index.html', 'styles.css', 'app.js', 'sync.js', 'config.js', 'manifest.webmanifest',
   'img/icona.svg', 'img/icona-180.png', 'img/icona-192.png', 'img/icona-512.png', 'img/favicon-32.png',
