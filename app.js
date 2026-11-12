@@ -951,7 +951,7 @@ function openGravacio(g, dataPerDefecte) {
   openDialog(`
     <h3>${nou ? 'Nova gravació' : 'Edita gravació'}</h3>
     <div class="row">
-      <label style="flex:3" class="no-dialeg"><span id="lblTitol">Títol o convidat</span> <input name="titol" value="${esc(g.titol)}" placeholder="Buit: el nom del convidat o «Sessió de gravació»"></label>
+      <label style="flex:3" class="no-dialeg"><span id="lblTitol">Títol o convidat</span> <input name="titol" value="${esc(g.titol)}" autocomplete="off"></label>
       <label style="flex:1">Núm. episodi <input type="number" inputmode="numeric" name="numero" min="0" value="${esc(g.numero ?? '')}"></label>
     </div>
     <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
@@ -989,14 +989,10 @@ function openGravacio(g, dataPerDefecte) {
         : '<span class="hint">Afegeix persones a la pestanya «Equip».</span>'}
     </fieldset>
     <label>Tècnic/a <select name="tecnic"><option value="">—</option>${equipPers().map((p) => `<option value="${p.id}" ${p.id === g.tecnic ? 'selected' : ''}>${esc(p.nom)}${p.rol ? ' · ' + esc(p.rol) : ''}</option>`).join('')}</select></label>
-    <fieldset class="nomes-entrevista"><legend>Convidats</legend>
-      ${(g.convidatsIds || []).map(pers).filter(Boolean).length ? `<div class="checks">${(g.convidatsIds || []).map(pers).filter(Boolean).map((p) => `<label><input type="checkbox" name="convidatsIds" value="${p.id}" checked> ${esc(p.nom)}</label>`).join('')}</div>` : ''}
-      <label style="margin-top:8px">Afegeix convidats
-        <input name="convidatsNous" list="llistaNomsConv" value="${esc((g.convidatsIds || []).length ? '' : (g.convidats || ''))}" placeholder="Escriu el nom (si ja té fitxa, s'hi enllaça)"></label>
-      <datalist id="llistaNomsConv">${convidatsPers().map((p) => `<option value="${esc(p.nom)}">`).join('')}</datalist>
-      <span class="hint">Per treure'n un, desmarca'l. Diversos noms, separats per comes.</span>
-      ${!nou && g.data ? (g.convidatsIds || []).map(pers).filter((p) => p && waLink(p.telefon)).map((p) => `<a class="btn small" style="margin-top:8px" href="${esc(waLink(p.telefon, missatgeGrav(p, g)))}" target="_blank" rel="noopener">💬 Recordatori a ${esc(p.nom)}</a>`).join(' ') : ''}
-    </fieldset>
+    ${!nou && g.data && (g.convidatsIds || []).map(pers).some((p) => p && waLink(p.telefon)) ? `<fieldset class="nomes-entrevista"><legend>Recordatori al convidat</legend>
+      ${(g.convidatsIds || []).map(pers).filter((p) => p && waLink(p.telefon)).map((p) => `<a class="btn small" href="${esc(waLink(p.telefon, missatgeGrav(p, g)))}" target="_blank" rel="noopener">💬 Recordatori a ${esc(p.nom)}</a>`).join(' ')}
+    </fieldset>` : ''}
+    <datalist id="llistaConvAgenda">${[...new Set([...convidatsPers().map((p) => p.nom), ...(state.agenda?.contactes || []).map((c) => c.nom)])].map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
     <fieldset><legend>Checklist de l'episodi</legend>
       <div class="checks">${CHECKLIST.map(([k, nom]) => `<label><input type="checkbox" name="checklist" value="${k}" ${g.checklist?.[k] ? 'checked' : ''}> ${nom}</label>`).join('')}</div>
     </fieldset>
@@ -1033,13 +1029,10 @@ function openGravacio(g, dataPerDefecte) {
         if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
         else if (!dades.titol) dades.titol = m.tipusEp === 'sessio' ? SESSIO : m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
       }
-      // Entrevista: sense títol (o amb «Sessió de gravació»), el títol és el nom del convidat; si encara no n'hi ha, «Sessió de gravació»
-      if (!musical && (!dades.titol || dades.titol === SESSIO)) {
-        const noms = [...f.getAll('convidatsIds').map(pers).filter(Boolean).map((p) => p.nom),
-          ...String(f.get('convidatsNous') || '').split(',').map((x) => x.trim()).filter(Boolean)];
-        dades.titol = noms.length ? [...new Set(noms)].join(', ') : SESSIO;
-      }
-      if (!dades.titol) { toast(musical ? 'Cal posar almenys els dos artistes.' : 'Cal posar un títol.'); return false; }
+      // Entrevista: el camp de dalt és el convidat; és obligatori i en fa el títol
+      const nomsConv = musical ? [] : [...new Set(dades.titol.split(',').map((x) => x.trim()).filter(Boolean))];
+      if (!musical) dades.titol = nomsConv.join(', ');
+      if (!dades.titol) { toast(musical ? 'Cal posar almenys els dos artistes.' : 'Cal posar el nom del convidat.'); return false; }
       if (!dades.data && !dades.emissio) { toast("Cal posar la data de gravació o la d'emissió."); return false; }
       const datesRep = nou && dades.data ? datesRepeticio(dades.data, f.get('repeteix'), f.get('finsA')) : [];
       if (nou && f.get('repeteix') && !datesRep.length) { toast('Tria fins a quin dia es repeteix.'); return false; }
@@ -1050,10 +1043,15 @@ function openGravacio(g, dataPerDefecte) {
         if (!confirm(`Atenció: coincideix amb altres gravacions (mateix estudi o mateixa persona):\n\n${llista}\n\nVols desar-la igualment?`)) return false;
       }
       // Convidats: els marcats + els nous (se'ls crea la fitxa, o es reaprofita si ja existeix amb el mateix nom)
-      const ids = musical ? [] : f.getAll('convidatsIds');
-      String(musical ? '' : f.get('convidatsNous') || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((nom) => {
-        let p = convidatsPers().find((x) => x.nom.toLowerCase() === nom.toLowerCase());
-        if (!p) { p = { id: uid(), nom, tipus: 'convidat', telefon: '', email: '', notes: '' }; state.persones.push(p); }
+      // Es vincula la fitxa del convidat (si no en té, se li crea amb el telèfon i el correu de Contactes)
+      const ids = [];
+      nomsConv.forEach((nom) => {
+        let p = convidatsPers().find((x) => clauCerca(x.nom) === clauCerca(nom));
+        if (!p) {
+          const c = contacteAgenda(nom);
+          p = { id: uid(), nom, tipus: 'convidat', telefon: c?.tels?.[0] || '', email: c?.emails?.[0] || '', notes: c?.empresa || '' };
+          state.persones.push(p);
+        }
         if (!ids.includes(p.id)) ids.push(p.id);
       });
       dades.convidatsIds = ids;
@@ -1143,7 +1141,9 @@ function actualitzaFormat(f) {
   mostra('.nomes-tematic', musical && tipus === 'tematic');
   mostra('.no-dialeg', !musical || tipus !== 'dialeg');
   f.querySelectorAll('.art-fila').forEach((el) => { el.hidden = Number(el.dataset.i) >= n; });
-  $('#lblTitol').textContent = !musical ? 'Títol o convidat' : tipus === 'sessio' ? 'Títol' : 'Títol (p. ex. Píndola resum 7)';
+  $('#lblTitol').textContent = !musical ? 'Convidat' : tipus === 'sessio' ? 'Títol' : 'Títol (p. ex. Píndola resum 7)';
+  if (musical) f.elements.titol.removeAttribute('list'); else f.elements.titol.setAttribute('list', 'llistaConvAgenda');
+  f.elements.titol.placeholder = musical ? '' : 'Nom del convidat (et proposa els que ja tens)';
   const previa = $('#previaTitol');
   if (previa) previa.textContent = musical && tipus === 'dialeg' ? `Títol: ${titolDialeg(llegeixMusica(new FormData(f))) || '— posa els dos artistes —'}` : '';
 }
