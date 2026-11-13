@@ -651,3 +651,12 @@ body.a-portada main { display: none; }
   .pc { padding: 3px 6px 3px 4px; font-size: 11px; gap: 3px; }
   .pc input { width: 13px; height: 13px; }
 }
+/* iPhone: les 5 caselles en 5 columnes iguals, amb una casella dibuixada (Safari les fa més grans) */
+@media (max-width: 760px) {
+  .pla-checks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px 8px 9px; }
+  .pc { justify-content: center; padding: 4px 2px; gap: 3px; font-size: 11px; min-width: 0; }
+  .pc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc input { -webkit-appearance: none; appearance: none; flex: none; width: 13px; height: 13px; border: 1.5px solid #0E0E0E; border-radius: 3px; background: #fff; display: grid; place-content: center; }
+  .pc input:checked { background: #0E0E0E; }
+  .pc input:checked::after { content: ''; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
+}
