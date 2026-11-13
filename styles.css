@@ -646,3 +646,8 @@ body.a-portada main { display: none; }
   .pla-t-nom { font-size: 11px; flex: none; }
   .pla-t-ep { font-size: 14px; }
 }
+@media (max-width: 760px) {
+  .pla-checks { gap: 4px; flex-wrap: nowrap; padding: 4px 8px 9px; }
+  .pc { padding: 3px 6px 3px 4px; font-size: 11px; gap: 3px; }
+  .pc input { width: 13px; height: 13px; }
+}
