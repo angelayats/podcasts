@@ -590,3 +590,59 @@ body.a-portada main { display: none; }
 .llegenda-dies { display: inline-flex; align-items: center; gap: 6px; }
 .caixa { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); margin-left: 6px; vertical-align: middle; }
 @media (max-width: 760px) { .cell .fest-nom { display: none; } }
+
+/* ---------- Planificació (Blanc & Negre) ---------- */
+:root { --pla-dialeg: #BFD7F5; --pla-pindola: #FFDB70; --pla-tematic: #D2B6F0; --pla-enviar: #FF7A1F; --pla-gravar: #1F66C9;
+  --pc-validat: #FFC94D; --pc-canvi: #FFC94D; --pc-guio: #B99DE6; --pc-gravat: #7FB0EE; --pc-emes: #9FDB95; --pc-pendent: #F4AFAF; --pla-mix: 100%; }
+@media (prefers-color-scheme: dark) { :root { --pla-mix: 32%; } }
+.t-dialeg { --pc: var(--pla-dialeg); } .t-pindola { --pc: var(--pla-pindola); } .t-tematic { --pc: var(--pla-tematic); }
+.pla-tauler { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.pla-t { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; border: 0; border-radius: 14px; padding: 10px 14px; color: #fff; cursor: pointer; font: inherit; min-width: 0; }
+.pla-t-enviar { background: var(--pla-enviar); } .pla-t-gravar { background: var(--pla-gravar); } .pla-t-guio { background: #6E4FC0; }
+.pla-t-nom { font-family: var(--font-title); text-transform: uppercase; letter-spacing: 1px; font-size: 13px; opacity: .9; }
+.pla-t-ep { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.pla-llegenda { align-items: center; }
+.pla-llegenda .caixa, .pla-llegenda .caixa { margin-left: 0; margin-right: 6px; }
+.caixa.t-dialeg { background: var(--pla-dialeg); } .caixa.t-pindola { background: var(--pla-pindola); } .caixa.t-tematic { background: var(--pla-tematic); }
+.caixa.marca-enviar { background: var(--pla-enviar); } .caixa.marca-gravar { background: var(--pla-gravar); }
+.pla-taula table { font-size: 14px; }
+.pla-taula td, .pla-taula th { padding: 6px 8px; }
+.pla-taula th.c, .pla-taula td.c { text-align: center; }
+.pla-taula tbody tr { background: color-mix(in srgb, var(--pc) var(--pla-mix), var(--surface)); }
+.pla-taula tbody tr.enviar { box-shadow: inset 6px 0 0 var(--pla-enviar); }
+.pla-taula tbody tr.gravar { box-shadow: inset 6px 0 0 var(--pla-gravar); }
+.pla-taula td.pla-obre { cursor: pointer; }
+.pla-taula td.pla-obre:hover { text-decoration: underline; }
+.pla-n { border: 0; background: none; font: inherit; font-weight: 700; cursor: pointer; color: inherit; padding: 0 4px; }
+.pla-notes { color: var(--muted); font-size: 12px; max-width: 220px; }
+.pla-buit { color: var(--muted); font-style: italic; }
+.pcel input { width: 18px; height: 18px; cursor: pointer; accent-color: #0E0E0E; }
+.pcel.si.pc-validat, .pcel.si.pc-canvi { background: var(--pc-validat); }
+.pcel.si.pc-guio { background: var(--pc-guio); } .pcel.si.pc-gravat { background: var(--pc-gravat); } .pcel.si.pc-emes { background: var(--pc-emes); }
+.pcel.no.pc-guio, .pcel.no.pc-gravat, .pcel.no.pc-emes { background: color-mix(in srgb, var(--pc-pendent) 70%, transparent); }
+.pla-marca { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #fff; vertical-align: middle; }
+.pla-marca.enviar { background: var(--pla-enviar); } .pla-marca.gravar { background: var(--pla-gravar); }
+.pla-cards { display: none; }
+.pla-card { background: color-mix(in srgb, var(--pc) var(--pla-mix), var(--surface)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+.pla-card.enviar { border: 2px solid var(--pla-enviar); } .pla-card.gravar { border: 2px solid var(--pla-gravar); }
+.pla-cos { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: 8px 10px 4px; cursor: pointer; }
+.pla-cap { font-size: 12px; color: var(--muted); }
+.pla-cap b { color: var(--text); font-size: 14px; }
+.pla-l { font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+.pla-checks { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 10px 9px; }
+.pc { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px 3px 6px; border-radius: 999px; font-size: 12px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; user-select: none; }
+.pc input { width: 15px; height: 15px; margin: 0; accent-color: #0E0E0E; }
+.pc-validat:has(input:checked), .pc-canvi:has(input:checked) { background: var(--pc-validat); color: #0E0E0E; }
+.pc-guio:has(input:checked) { background: var(--pc-guio); color: #0E0E0E; }
+.pc-gravat:has(input:checked) { background: var(--pc-gravat); color: #0E0E0E; }
+.pc-emes:has(input:checked) { background: var(--pc-emes); color: #0E0E0E; }
+.flash { animation: flash 1.4s ease; }
+@keyframes flash { 0%, 40% { outline: 3px solid var(--pla-enviar); outline-offset: -3px; } 100% { outline: 3px solid transparent; } }
+@media (max-width: 760px) {
+  .pla-taula { display: none; }
+  .pla-cards { display: block; }
+  .pla-tauler { grid-template-columns: 1fr; gap: 6px; }
+  .pla-t { padding: 8px 12px; flex-direction: row; align-items: baseline; gap: 8px; }
+  .pla-t-nom { font-size: 11px; flex: none; }
+  .pla-t-ep { font-size: 14px; }
+}

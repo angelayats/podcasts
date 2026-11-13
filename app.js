@@ -182,13 +182,13 @@ function estatOptions(sel, buit) {
 
 /* ---------- Render general ---------- */
 function render() {
-  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === ui.view));
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === (ui.view === 'planificacio' ? 'programes' : ui.view)));
   // Portada: la caràtula queda fixa, amb el menú a sota
   const portada = ui.view === 'portada';
   document.body.classList.toggle('a-portada', portada);
   $('#splash').classList.toggle('fora', !portada);
   document.documentElement.style.setProperty('--alt-cap', (document.querySelector('header')?.offsetHeight || 0) + 'px');
-  const views = { portada: (m) => { m.innerHTML = ''; }, calendari: renderCal, agenda: renderAgenda, programes: renderProgrames, persones: renderPersones, contactes: renderContactes, config: renderConfig };
+  const views = { portada: (m) => { m.innerHTML = ''; }, calendari: renderCal, agenda: renderAgenda, programes: renderProgrames, planificacio: renderPlanificacio, persones: renderPersones, contactes: renderContactes, config: renderConfig };
   views[ui.view]($('#main'));
 }
 
@@ -384,11 +384,152 @@ function renderProgrames(m) {
           <div class="sub"><span class="dot" style="--c:${p.color}"></span>${p.tipus === 'podcast' ? 'Podcast' : 'Programa'} · ${gs.length} episodis</div>
           <div class="sub">${properes.length ? `Propera: ${dataCurta(properes[0].data)}, ${properes[0].hora}` : 'Cap gravació programada'}</div>
           <div class="acts"><button class="btn small" data-action="edita-programa" data-id="${p.id}">Edita</button>
-            <button class="btn small" data-action="filtra-programa" data-id="${p.id}">Calendari</button></div>
+            <button class="btn small" data-action="filtra-programa" data-id="${p.id}">Calendari</button>
+            ${esMusical(p.id) ? `<button class="btn small" data-action="planificacio" data-id="${p.id}">Planificació</button>` : ''}</div>
         </div>
       </div>`;
     }).join('') || '<p class="empty">Encara no hi ha programes. Crea el primer!</p>'}</div>
     ${estadistiques()}`;
+}
+
+/* ---------- Planificació (programes musicals: Blanc & Negre) ---------- */
+// Ordre d'emissió de tots els episodis numerats: diàlegs, píndoles resum i temàtics.
+// Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Emissió cada dissabte; juliol i agost, vacances.
+const PLA_ESTATS = [['validat', 'Validat'], ['canvi', 'Canvi'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['emes', 'Emès']];
+const TIPUS_PLA = { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic' };
+const episodisPla = (pid) => state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && TIPUS_PLA[g.tipusEp]).sort((a, b) => a.numero - b.numero);
+const fet = (g, k) => Boolean(g.pla?.[k]);
+const artDisc = (a) => (a?.artista ? `<b>${esc(a.artista)}</b>${a.disc ? ' · ' + esc(a.disc) : ''}` : '');
+function columnesPla(g) {
+  if (g.tipusEp === 'pindola') return [`<b><i>${esc(g.titol || 'Píndola resum')}</i></b>`, esc((g.classics || []).map((a) => a.artista).filter(Boolean).join(', '))];
+  if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}`, ''];
+  return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
+}
+const checksPla = (g) => PLA_ESTATS.map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''}><span>${nom}</span></label>`).join('');
+
+function renderPlanificacio(m) {
+  const p = prog(ui.planProg) || state.programes.find((x) => esMusical(x.id));
+  if (!p) { ui.view = 'programes'; return renderProgrames(m); }
+  ui.planProg = p.id;
+  const eps = episodisPla(p.id);
+  const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat')), guio = eps.find((g) => !fet(g, 'guio'));
+  const tauler = [['enviar', "Enviar a l'emissora", env], ['gravar', 'Proper a gravar', grav], ['guio', 'Proper guió', guio]];
+  m.innerHTML = `
+    <div class="toolbar">
+      <div class="grp"><button class="btn nav-btn" data-action="vista" data-v="programes" aria-label="Torna a Programes">‹</button><h2>Planificació</h2></div>
+      <div class="grp">
+        <input type="search" id="cercaPla" placeholder="Cerca artista, disc, tema…" value="${esc(ui.cercaPla || '')}">
+        <select data-filter="filtrePla" aria-label="Què es mostra">${[['tots', 'Tots els episodis'], ['pendents', 'Pendents d\'emetre'], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar']]
+          .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <button class="btn" data-action="renumera">↻ Renumera</button>
+      </div>
+    </div>
+    <div class="pla-tauler">${tauler.map(([k, nom, g]) => `<button class="pla-t pla-t-${k}" ${g ? `data-action="ves-pla" data-id="${g.id}"` : ''}>
+      <span class="pla-t-nom">${nom}</span>
+      <span class="pla-t-ep">${g ? `Ep. ${g.numero}${k === 'enviar' && g.emissio ? ' · ' + dataCurta(g.emissio) : ''} · ${esc(g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic' + (g.tema ? ' ' + g.tema : '') : g.titol)}` : 'Tot fet ✓'}</span></button>`).join('')}</div>
+    <div class="legend pla-llegenda">${Object.entries(TIPUS_PLA).map(([k, t]) => `<span><span class="caixa t-${k}"></span>${t}</span>`).join('')}
+      <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
+      <span class="hint">${p.nom} · ${eps.length} episodis</span></div>
+    <div id="plaLlista"></div>`;
+  plaLlista();
+}
+function plaLlista() {
+  const eps = episodisPla(ui.planProg);
+  const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat'));
+  const q = clauCerca(ui.cercaPla || ''), f = ui.filtrePla || 'tots';
+  const rows = eps
+    .filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes')) || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')))
+    .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, textMusica(g), g.notes].join(' ')).includes(w)));
+  const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
+  const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '');
+  const taula = `<div class="panel pla-taula"><table>
+    <thead><tr><th>Núm.</th><th>Tipus</th><th>Emissió</th><th>Clàssic / Títol</th><th>Alternatiu</th>${PLA_ESTATS.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
+    <tbody>${rows.map((g) => { const [a, b] = columnesPla(g); return `<tr id="pla-${g.id}" class="t-${g.tipusEp} ${marca(g)}">
+      <td class="nowrap"><button class="pla-n" data-action="edita" data-id="${g.id}">${g.numero}</button>${etiqueta(g)}</td>
+      <td>${TIPUS_PLA[g.tipusEp]}</td>
+      <td class="nowrap">${g.emissio ? dataCurta(g.emissio) : '—'}</td>
+      <td class="pla-obre" data-action="edita" data-id="${g.id}">${a}</td>
+      <td class="pla-obre" data-action="edita" data-id="${g.id}">${b}</td>
+      ${PLA_ESTATS.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : 'no'}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} aria-label="${k}"></td>`).join('')}
+      <td class="pla-notes">${esc(g.notes || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
+  const targetes = `<div class="pla-cards">${rows.map((g) => { const [a, b] = columnesPla(g); return `<div id="plac-${g.id}" class="pla-card t-${g.tipusEp} ${marca(g)}">
+      <button class="pla-cos" data-action="edita" data-id="${g.id}">
+        <span class="pla-cap"><b>${g.numero}</b> · ${TIPUS_PLA[g.tipusEp]}${g.emissio ? ' · ' + dataCurta(g.emissio) : ''} ${etiqueta(g)}</span>
+        <span class="pla-l">${a}</span>${b ? `<span class="pla-l">${b}</span>` : ''}
+        ${g.notes ? `<span class="pla-l pla-notes">${esc(g.notes)}</span>` : ''}
+      </button>
+      <div class="pla-checks">${checksPla(g)}</div></div>`; }).join('')}</div>`;
+  $('#plaLlista').innerHTML = rows.length ? taula + targetes : '<p class="empty">Cap episodi amb aquests filtres.</p>';
+}
+// Porta a la vista l'episodi (a la taula o a les targetes, segons la pantalla)
+function vesPla(id) {
+  const el = document.getElementById((mobil.matches ? 'plac-' : 'pla-') + id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+}
+
+// Renumeració: els episodis emesos no es toquen; la resta segueix el cicle i rep dates de dissabte
+function seguentDissabte(ds) {
+  let d = addDays(parseYmd(ds), 7);
+  if (d.getMonth() === 6 || d.getMonth() === 7) {           // juliol i agost, vacances: es torna el 2n dissabte de setembre
+    d = new Date(d.getFullYear(), 8, 1);
+    while (d.getDay() !== 6) d = addDays(d, 1);
+    d = addDays(d, 7);
+  }
+  return ymd(d);
+}
+function nouEpPla(pid, tipus) {
+  return { id: uid(), programaId: pid, tipusEp: tipus, titol: tipus === 'tematic' ? 'Temàtic per decidir' : '', tema: '', numero: 0, data: '', hora: '', durada: 60,
+    estat: 'pendent', presentadors: [], tecnic: '', notes: '', classics: [], contemporanis: [], emissio: '', horaEmissio: '', pla: {} };
+}
+function calculaRenumeracio(pid) {
+  const eps = episodisPla(pid);
+  const ultEmes = eps.reduce((ix, g, i) => (fet(g, 'emes') ? i : ix), -1);
+  const fixos = eps.slice(0, ultEmes + 1), resta = eps.slice(ultEmes + 1);
+  let grup = [];                                              // diàlegs ja emesos del grup en curs
+  for (let i = fixos.length - 1; i >= 0 && fixos[i].tipusEp === 'dialeg'; i--) grup.unshift(fixos[i]);
+  let pinds = 0;                                              // píndoles des de l'últim temàtic
+  for (let i = fixos.length - 1; i >= 0 && fixos[i].tipusEp !== 'tematic'; i--) if (fixos[i].tipusEp === 'pindola') pinds++;
+  let nP = fixos.filter((g) => g.tipusEp === 'pindola').length;
+  const dialegs = resta.filter((g) => g.tipusEp === 'dialeg'), tematics = resta.filter((g) => g.tipusEp === 'tematic');
+  const velles = resta.filter((g) => g.tipusEp === 'pindola'), nous = [], ordre = [];
+  const posaPindola = () => {
+    nP++;
+    const p = velles.shift() || (nous.push(nouEpPla(pid, 'pindola')), nous[nous.length - 1]);
+    ordre.push([p, { titol: `Píndola resum ${nP}`, classics: grup.map((d) => ({ artista: d.classics?.[0]?.artista || '', disc: '' })) }]);
+    grup = []; pinds++;
+    if (pinds === 2) { pinds = 0; ordre.push([tematics.shift() || (nous.push(nouEpPla(pid, 'tematic')), nous[nous.length - 1]), {}]); }
+  };
+  for (const d of dialegs) { if (grup.length === 4) posaPindola(); ordre.push([d, {}]); grup.push(d); }
+  if (grup.length === 4) posaPindola();
+  tematics.forEach((t) => ordre.push([t, {}]));
+  let num = fixos.length ? Number(fixos[fixos.length - 1].numero) : 0;
+  let data = fixos.length ? fixos[fixos.length - 1].emissio : '';
+  const hora = fixos[fixos.length - 1]?.horaEmissio || '';
+  ordre.forEach(([g, extra]) => {
+    num++;
+    if (data) data = seguentDissabte(data);
+    extra.numero = num;
+    if (data) { extra.emissio = data; if (!g.horaEmissio && hora) extra.horaEmissio = hora; }
+  });
+  const canvis = ordre.filter(([g, x]) => g.numero !== x.numero || (x.emissio && g.emissio !== x.emissio) || (x.titol && g.titol !== x.titol)).length;
+  return { ordre, nous, sobrants: velles, canvis, desDe: fixos.length ? num - ordre.length + 1 : 1, finsA: num };
+}
+function renumera() {
+  const r = calculaRenumeracio(ui.planProg);
+  if (!r.canvis && !r.nous.length && !r.sobrants.length) return toast('La numeració ja està bé: no cal canviar res.');
+  const txt = [`Es tornarà a numerar del ${r.desDe} al ${r.finsA} seguint el cicle (4 diàlegs · píndola · 4 diàlegs · píndola · temàtic), amb les dates dels dissabtes.`,
+    `${r.canvis} episodis canvien de número, data o títol.`,
+    r.nous.length ? `Es creen ${r.nous.length} episodis nous (píndoles o temàtics per decidir).` : '',
+    r.sobrants.length ? `S'esborren ${r.sobrants.length} píndoles que ja no tenen lloc.` : '',
+    'Els episodis emesos no es toquen. Continuar?'].filter(Boolean).join('\n\n');
+  if (!confirm(txt)) return;
+  r.ordre.forEach(([g, x]) => Object.assign(g, x));
+  state.gravacions.push(...r.nous);
+  const fora = new Set(r.sobrants.map((g) => g.id));
+  state.gravacions = state.gravacions.filter((g) => !fora.has(g.id));
+  save(); render(); toast('Planificació renumerada.');
 }
 
 /* ---------- Estadístiques ---------- */
@@ -1308,6 +1449,15 @@ $('#main').addEventListener('click', (e) => {
     case 'nou-programa': return openPrograma(null);
     case 'edita-programa': return openPrograma(prog(id));
     case 'filtra-programa': ui.filtrePrograma = id; ui.view = 'calendari'; break;
+    case 'planificacio': {
+      ui.view = 'planificacio'; ui.planProg = id; render(); window.scrollTo(0, 0);
+      const eps = episodisPla(id), g = eps.find((x) => !fet(x, 'emes'));
+      if (g) setTimeout(() => vesPla(g.id), 60);
+      return;
+    }
+    case 'vista': ui.view = el.dataset.v; render(); window.scrollTo(0, 0); return;
+    case 'ves-pla': return vesPla(id);
+    case 'renumera': return renumera();
     case 'nova-persona': return openPersona(null);
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
@@ -1343,6 +1493,15 @@ $('#main').addEventListener('click', (e) => {
 
 $('#main').addEventListener('change', (e) => {
   const t = e.target;
+  if (t.dataset.pla) {
+    const g = state.gravacions.find((x) => x.id === t.dataset.pla);
+    if (g) {
+      g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
+      save();
+      const y = window.scrollY; render(); window.scrollTo(0, y);
+    }
+    return;
+  }
   if (t.dataset.estat) {
     const g = state.gravacions.find((x) => x.id === t.dataset.estat);
     if (g) { g.estat = t.value; save(); renderTaula(); }
@@ -1357,10 +1516,12 @@ $('#main').addEventListener('change', (e) => {
   if (f === 'emissions') { ui.veureEmissions = t.checked; desaPref('veureEmissions', t.checked); render(); return; }
   if (f === 'any') { ui.anyStats = t.value === 'tots' ? 'tots' : Number(t.value); ui.statsSel = null; render(); return; }
   if (f === 'progStats') { ui.progStats = t.value; ui.statsSel = null; desaPref('progStats', t.value); render(); return; }
+  if (f === 'filtrePla') { ui.filtrePla = t.value; plaLlista(); return; }
   ui.view === 'agenda' ? renderTaula() : render();
 });
 $('#main').addEventListener('input', (e) => {
   if (e.target.id === 'cerca') { ui.cerca = e.target.value; renderTaula(); }
+  if (e.target.id === 'cercaPla') { ui.cercaPla = e.target.value; plaLlista(); }
   if (e.target.id === 'cercaCont') { ui.cercaCont = e.target.value; $('#llistaCont').innerHTML = llistaContactes(); }
   if (e.target.id === 'cercaStats') { ui.cercaStats = e.target.value; $('#statsLlista').innerHTML = llistaStats(); }
   if (e.target.id === 'cercaConv' || e.target.id === 'filtreConv') {
