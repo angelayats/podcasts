@@ -9,19 +9,34 @@ const Sync = (() => {
   const ENTORN = PROVES ? 'proves' : 'definitiva';
   const MKEY = KEY + '-sync';
   const CKEY = 'podcasts-clau';
-  const COLS = ['programes', 'persones', 'gravacions'];
+  const COLS = ['programes', 'persones', 'gravacions', 'propostes'];
+  const PKEY = 'podcasts-perfil';                    // «angel» o «david» (el servidor és qui mana)
 
   let sb = null, clau = '', valida = null;
   let estat = disponible ? 'sense-clau' : 'off', detall = '';
   let ocupat = false, repetir = false, temps = null, aplicant = false;
   let meta = llegeix();
+  let canviClau = false;
+  // Quan el dispositiu canvia de clau, les dades d'abans no hi han de quedar: es tornen a baixar del servidor
+  function reinicia() {
+    try { localStorage.removeItem(PKEY); } catch (e) { /* res */ }
+    state = normalize({});
+    meta = { snap: {}, ultima: null };
+    desa();
+    aplicant = true; save(); aplicant = false;
+    render();
+  }
 
   /* ---------- Clau del dispositiu ---------- */
   function llegeixClau() {
     // Si s'obre l'enllaç privat (…#clau=XXXX), es guarda la clau i es neteja l'adreça
     const m = location.hash.match(/clau=([A-Za-z0-9]+)/);
     if (m) {
-      try { localStorage.setItem(CKEY, m[1]); } catch (e) { /* res */ }
+      try {
+        const vella = localStorage.getItem(CKEY);
+        if (vella && vella !== m[1]) canviClau = true;   // una altra clau (p. ex. la d'en David): es comença de nou
+        localStorage.setItem(CKEY, m[1]);
+      } catch (e) { /* res */ }
       history.replaceState(null, '', location.pathname + location.search);
     }
     try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; }
@@ -69,12 +84,59 @@ const Sync = (() => {
       const [coleccio, id] = parteix(k);
       return { entorn: ENTORN, coleccio, id, dades: JSON.parse(v), esborrat };
     });
+    if (perfilActual() === 'david') return pujaDavid(files);
     for (let i = 0; i < files.length; i += 500) {
       const { error } = await sb.from('registres').upsert(files.slice(i, i + 500), { onConflict: 'entorn,coleccio,id' });
       if (error) throw error;
     }
     p.forEach(({ k, v, esborrat }) => { if (esborrat) delete meta.snap[k]; else meta.snap[k] = v; });
     desa();
+  }
+
+  /* ---------- Perfil d'en David: només Blanc & Negre ----------
+     El servidor decideix què es desa. El que no accepta es torna a agafar tal com és al servidor. */
+  async function pujaDavid(files) {
+    const esBn = (d) => /blanc/i.test(state.programes.find((x) => x.id === d?.programaId)?.nom || '');
+    const envia = files.filter((f) => f.coleccio === 'propostes' || (f.coleccio === 'gravacions' && esBn(f.dades)));
+    const tornats = new Map();
+    const desa1 = async (lot) => {
+      const { data, error } = await sb.from('registres').upsert(lot, { onConflict: 'entorn,coleccio,id' }).select('coleccio,id,dades,esborrat');
+      if (error) throw error;
+      data.forEach((r) => tornats.set(r.coleccio + ':' + r.id, r));
+    };
+    if (envia.length) {
+      try { await desa1(envia); }
+      catch (e) { for (const f of envia) { try { await desa1([f]); } catch (e2) { /* es recupera del servidor */ } } }
+    }
+    const falten = files.filter((f) => !tornats.has(f.coleccio + ':' + f.id));
+    for (const c of [...new Set(falten.map((f) => f.coleccio))]) {
+      const ids = falten.filter((f) => f.coleccio === c).map((f) => f.id);
+      const { data, error } = await sb.from('registres').select('coleccio,id,dades,esborrat').eq('entorn', ENTORN).eq('coleccio', c).in('id', ids);
+      if (error) throw error;
+      data.forEach((r) => tornats.set(r.coleccio + ':' + r.id, r));
+    }
+    const ara = mapa();
+    let canvi = false;
+    files.forEach((f) => {
+      const k = f.coleccio + ':' + f.id, r = tornats.get(k);
+      if (r && !r.esborrat) {
+        if (posa(f.coleccio, f.id, r.dades)) canvi = true;
+        meta.snap[k] = estable(r.dades);
+      } else {
+        if (treu(f.coleccio, f.id)) canvi = true;
+        if (f.coleccio === 'config' && k in ara) meta.snap[k] = ara[k]; else delete meta.snap[k];
+      }
+    });
+    desa();
+    if (canvi) { aplicant = true; save(); aplicant = false; render(); }
+  }
+  function perfilActual() { try { return localStorage.getItem(PKEY) || ''; } catch (e) { return ''; } }
+  async function comprovaPerfil() {
+    const { data, error } = await sb.rpc('perfil');
+    const nou = error ? 'angel' : (data || '');        // abans de posar el perfil al servidor, tothom és l'Angel
+    if (nou === perfilActual()) return;
+    try { localStorage.setItem(PKEY, nou); } catch (e) { /* res */ }
+    render();
   }
 
   /* ---------- Baixar canvis d'altres dispositius ---------- */
@@ -188,6 +250,7 @@ const Sync = (() => {
       if (valida !== true) {
         valida = await comprovaClau();
         if (!valida) { posaEstat('clau-dolenta'); ocupat = false; return; }
+        await comprovaPerfil();
       }
       if (!meta.ultima) { await baixa(); await puja(); await baixa(); }
       else { await puja(); await baixa(); }
@@ -205,15 +268,18 @@ const Sync = (() => {
   }
 
   function vincula(nova) {
+    const vella = clau || (() => { try { return localStorage.getItem(CKEY) || ''; } catch (e) { return ''; } })();
+    if (vella && vella !== nova.trim() && meta.ultima) reinicia();
     clau = nova.trim();
     valida = null;
+    try { localStorage.removeItem(PKEY); } catch (e) { /* res */ }
     try { localStorage.setItem(CKEY, clau); } catch (e) { /* res */ }
     client();
     programa(0);
   }
   function desvincula() {
     clau = ''; valida = null; sb = null;
-    try { localStorage.removeItem(CKEY); } catch (e) { /* res */ }
+    try { localStorage.removeItem(CKEY); localStorage.removeItem(PKEY); } catch (e) { /* res */ }
     posaEstat('sense-clau');
   }
 
@@ -255,7 +321,7 @@ const Sync = (() => {
     }
     const pend = pendents().length;
     return `<div class="section" id="seccioSync"><h2>Sincronització</h2>
-      <p class="help">Aquest dispositiu està <b>vinculat</b>${PROVES ? ' · <span class="proves">PROVES</span>' : ''}.<br>
+      <p class="help">Aquest dispositiu està <b>vinculat</b>${PROVES ? ' · <span class="proves">PROVES</span>' : ''}${perfilActual() === 'david' ? ' · Perfil: <b>David · Blanc &amp; Negre</b>' : ''}.<br>
         Estat: <b>${TEXTOS[estat] || '—'}</b> · Darrera actualització: ${hora(meta.ultima)}${pend ? ` · ${pend} canvis per pujar` : ''}
         ${estat === 'error' && detall ? `<br><span class="hint">${esc(detall)}</span>` : ''}</p>
       <div class="grp">
@@ -284,6 +350,7 @@ const Sync = (() => {
     if (b) b.addEventListener('click', () => { ui.view = 'config'; render(); window.scrollTo(0, 0); });
     if (!disponible) { posaEstat('off'); return; }
     clau = llegeixClau();
+    if (canviClau && meta.ultima) reinicia();
     client();
     addEventListener('online', () => programa(0));
     addEventListener('offline', () => posaEstat('offline'));

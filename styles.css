@@ -660,3 +660,25 @@ body.a-portada main { display: none; }
   .pc input[type="checkbox"]:checked { background: #0E0E0E; }
   .pc input[type="checkbox"]:checked::after { content: ''; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
 }
+
+/* ---------- Perfil d'en David (només Blanc & Negre) ---------- */
+body.perfil-david .nomes-angel, body.perfil-david #tabs [data-view="contactes"] { display: none !important; }
+body:not(.perfil-david) .nomes-david { display: none !important; }
+:root { --pla-david: #C2255C; }
+.pla-marca.david { background: var(--pla-david); text-transform: none; }
+.avis-n { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: var(--pla-david); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.pla-avis, .pla-prop { border: 2px solid var(--pla-david); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.pla-prop { border-color: #E8A33D; }
+.pla-avis-cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pla-avis-l { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--border); background: none; font: inherit; color: inherit; padding: 6px 0 2px; cursor: pointer; }
+.pla-avis-l:hover span:first-child { text-decoration: underline; }
+.pla-prop-l { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; border-top: 1px solid var(--border); padding-top: 6px; }
+.pla-prop-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pla-prop-b { display: flex; align-items: center; gap: 6px; }
+.pla-prop-e { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FFE8B3; color: #0E0E0E; }
+.pla-prop-e.e-acceptada { background: var(--pc-emes); } .pla-prop-e.e-descartada { background: var(--border); color: var(--muted); }
+.pcel input:disabled, .pc input:disabled { cursor: not-allowed; opacity: .45; }
+.pc:has(input:disabled) { cursor: not-allowed; }
+.nota-david { margin: -4px 0 12px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--pla-david) 12%, var(--surface)); font-size: 13px; }
+#dlgForm select.bloquejat { pointer-events: none; opacity: .6; }
+#dlgForm input[readonly] { opacity: .6; }

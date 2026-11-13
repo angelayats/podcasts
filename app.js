@@ -53,7 +53,7 @@ function seed() {
       { id: david, nom: 'David Izquierdo', rol: 'Presentació' },
     ],
     estudis: ['Estudi 1'], ubicacions: {}, agenda: { contactes: [], importat: '' },
-    gravacions: [],
+    gravacions: [], propostes: [],
   };
 }
 function normalize(d) {
@@ -65,6 +65,7 @@ function normalize(d) {
     agenda: { contactes: arr(d.agenda?.contactes), importat: d.agenda?.importat || '' },
     plantilles: d.plantilles && typeof d.plantilles === 'object' ? d.plantilles : {},
     gravacions: arr(d.gravacions).map((g) => ({ presentadors: [], durada: 60, estat: 'pendent', ...g })),
+    propostes: arr(d.propostes),
   };
 }
 function load() {
@@ -98,6 +99,11 @@ const ui = {
 
 const prog = (id) => state.programes.find((p) => p.id === id);
 const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format ? p.format === 'musical' : /blanc/i.test(p.nom))); };
+// Perfil del dispositiu: l'Angel ho pot fer tot; en David només treballa Blanc & Negre (el servidor ho fa complir)
+const esDavid = () => { try { return localStorage.getItem('podcasts-perfil') === 'david'; } catch (e) { return false; } };
+const bnId = () => state.programes.find((p) => /blanc/i.test(p.nom))?.id || '';
+const NUMERATS = ['dialeg', 'pindola', 'tematic'];
+const NOMES_ANGEL = new Set(['nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
 // Quants artistes de cada costat té cada tipus d'episodi musical
 const SESSIO = 'Sessió de gravació';
 const TIPUS_EP = { sessio: ['Sessió de gravació (sense episodi concret)', 0], dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
@@ -182,6 +188,9 @@ function estatOptions(sel, buit) {
 
 /* ---------- Render general ---------- */
 function render() {
+  const david = esDavid();
+  document.body.classList.toggle('perfil-david', david);
+  if (david && ui.view === 'contactes') ui.view = 'calendari';
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === (ui.view === 'planificacio' ? 'programes' : ui.view)));
   // Portada: la caràtula queda fixa, amb el menú a sota
   const portada = ui.view === 'portada';
@@ -373,7 +382,7 @@ function renderProgrames(m) {
   const avui = ymd(new Date());
   m.innerHTML = `
     <div class="toolbar"><div class="grp" style="width:auto"><h2 style="margin:0">Programes i podcasts</h2></div>
-      <button class="btn primary" data-action="nou-programa">+ Nou programa</button></div>
+      <button class="btn primary nomes-angel" data-action="nou-programa">+ Nou programa</button></div>
     <div class="cards">${state.programes.map((p) => {
       const gs = state.gravacions.filter((g) => g.programaId === p.id);
       const properes = gs.filter((g) => g.data >= avui && g.estat !== 'cancellat').sort(ordena);
@@ -383,9 +392,9 @@ function renderProgrames(m) {
           <h3>${esc(p.nom)}</h3>
           <div class="sub"><span class="dot" style="--c:${p.color}"></span>${p.tipus === 'podcast' ? 'Podcast' : 'Programa'} · ${gs.length} episodis</div>
           <div class="sub">${properes.length ? `Propera: ${dataCurta(properes[0].data)}, ${properes[0].hora}` : 'Cap gravació programada'}</div>
-          <div class="acts"><button class="btn small" data-action="edita-programa" data-id="${p.id}">Edita</button>
+          <div class="acts"><button class="btn small nomes-angel" data-action="edita-programa" data-id="${p.id}">Edita</button>
             <button class="btn small" data-action="filtra-programa" data-id="${p.id}">Calendari</button>
-            ${esMusical(p.id) ? `<button class="btn small" data-action="planificacio" data-id="${p.id}">Planificació</button>` : ''}</div>
+            ${esMusical(p.id) ? `<button class="btn small" data-action="planificacio" data-id="${p.id}">Planificació${avisPrograma(p.id)}</button>` : ''}</div>
         </div>
       </div>`;
     }).join('') || '<p class="empty">Encara no hi ha programes. Crea el primer!</p>'}</div>
@@ -405,7 +414,114 @@ function columnesPla(g) {
   if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}`, ''];
   return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
 }
-const checksPla = (g) => PLA_ESTATS.map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''}><span>${nom}</span></label>`).join('');
+const checksPla = (g) => PLA_ESTATS.map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'}><span>${nom}</span></label>`).join('');
+// En David no pot marcar Guió ni Emès, ni tocar res d'un episodi emès
+const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && k !== 'guio' && k !== 'emes');
+
+/* Canvis d'en David (els marca el servidor) i propostes de diàlegs i temàtics */
+const NOMS_CAMPS = { contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
+  presentadors: 'equip', tecnic: 'tècnic', notes: 'notes', checklist: 'checklist', pla: 'caselles', nova: 'sessió nova', esborrada: 'esborrada' };
+const avisosDavid = (pid) => (esDavid() ? [] : state.gravacions.filter((g) => g.david && g.programaId === pid)
+  .sort((a, b) => (Number(a.numero) || 1e6) - (Number(b.numero) || 1e6) || ordena(a, b)));
+const propostesPendents = () => state.propostes.filter((x) => (x.estat || 'pendent') === 'pendent');
+const avisPrograma = (pid) => { const n = esDavid() ? 0 : avisosDavid(pid).length + propostesPendents().length; return n ? ` <span class="avis-n" title="Canvis i propostes d'en David">${n}</span>` : ''; };
+const quanDavid = (g) => { const q = g.david?.quan || ''; return q ? `${dataCurta(q.slice(0, 10))} ${q.slice(11, 16)}` : ''; };
+function blocAvisos(pid) {
+  const av = avisosDavid(pid);
+  if (!av.length) return '';
+  const camps = (g) => [...new Set((g.david.camps || []).map((c) => NOMS_CAMPS[c] || c))].join(', ');
+  return `<div class="pla-avis"><div class="pla-avis-cap"><b>✎ En David ha fet ${av.length === 1 ? 'un canvi' : av.length + ' canvis'}</b>
+      <button class="btn small" data-action="avisos-vistos">✓ Vist</button></div>
+    ${av.slice(0, 12).map((g) => `<button class="pla-avis-l" data-action="${NUMERATS.includes(g.tipusEp) && g.numero ? 'ves-pla' : 'edita'}" data-id="${g.id}">
+      <span>${g.numero ? 'Ep. ' + g.numero : dataCurta(g.data)} · ${esc(g.titol || '')}</span><span class="hint">${esc(camps(g))} · ${quanDavid(g)}</span></button>`).join('')}
+    ${av.length > 12 ? `<span class="hint">… i ${av.length - 12} més: tria «Canviats per en David» al filtre.</span>` : ''}</div>`;
+}
+function avisosVistos() {
+  avisosDavid(ui.planProg).forEach((g) => { delete g.david; });
+  save(); render(); toast('Canvis marcats com a vistos.');
+}
+const ESTAT_PROP = { pendent: 'Pendent', acceptada: 'Acceptada', descartada: 'Descartada' };
+const textProposta = (x) => (x.tipus === 'tematic' ? `Temàtic · <b>${esc(x.tema || '')}</b>`
+  : `${artDisc(x.classic) || '<span class="pla-buit">clàssic</span>'} ↔ ${artDisc(x.alternatiu) || '<span class="pla-buit">alternatiu per decidir</span>'}`);
+function blocPropostes() {
+  const david = esDavid();
+  const ll = david
+    ? [...state.propostes].sort((a, b) => (a.estat === 'pendent' ? 0 : 1) - (b.estat === 'pendent' ? 0 : 1) || String(b.creada || '').localeCompare(String(a.creada || ''))).slice(0, 15)
+    : propostesPendents();
+  if (!ll.length) return '';
+  return `<div class="pla-prop"><div class="pla-avis-cap"><b>💡 ${david ? 'Les teves propostes' : `Propostes d'en David (${ll.length})`}</b></div>
+    ${ll.map((x) => `<div class="pla-prop-l"><div class="pla-prop-txt"><span>${textProposta(x)}</span>${x.notes ? `<span class="hint">${esc(x.notes)}</span>` : ''}</div>
+      <div class="pla-prop-b">${david
+        ? (x.estat === 'pendent' ? `<span class="pla-prop-e">Pendent</span><button class="btn small" data-action="proposta" data-id="${x.id}">Edita</button>`
+          : `<span class="pla-prop-e e-${esc(x.estat)}">${ESTAT_PROP[x.estat] || esc(x.estat)}${x.ep ? ' · Ep. ' + x.ep : ''}</span>`)
+        : `<button class="btn small primary" data-action="accepta-proposta" data-id="${x.id}">Accepta</button><button class="btn small" data-action="descarta-proposta" data-id="${x.id}">Descarta</button>`}</div></div>`).join('')}</div>`;
+}
+function openProposta(x) {
+  const nou = !x;
+  x = x || { id: uid(), tipus: 'dialeg', classic: {}, alternatiu: {}, tema: '', notes: '', estat: 'pendent' };
+  const v = (o, k) => esc(o?.[k] || '');
+  openDialog(`<h3>${nou ? 'Nova proposta' : 'Edita la proposta'}</h3>
+    <p class="help">L'Angel la revisarà. Si l'accepta, entrarà a la planificació en el primer lloc per decidir.</p>
+    <label>Tipus <select name="tipus"><option value="dialeg" ${x.tipus !== 'tematic' ? 'selected' : ''}>Diàleg (clàssic ↔ alternatiu)</option><option value="tematic" ${x.tipus === 'tematic' ? 'selected' : ''}>Temàtic</option></select></label>
+    <div class="prop-dialeg">
+      <div class="row"><label>Clàssic <input name="ca" value="${v(x.classic, 'artista')}" placeholder="Artista" autocomplete="off"></label><label>Disc <input name="cd" value="${v(x.classic, 'disc')}" autocomplete="off"></label></div>
+      <div class="row"><label>Alternatiu <input name="aa" value="${v(x.alternatiu, 'artista')}" placeholder="Artista (si el tens)" autocomplete="off"></label><label>Disc <input name="ad" value="${v(x.alternatiu, 'disc')}" autocomplete="off"></label></div>
+    </div>
+    <label class="prop-tematic">Tema <input name="tema" value="${v(x, 'tema')}" placeholder="Ex.: Guitarres" autocomplete="off"></label>
+    <label>Notes <textarea name="notes" rows="3">${esc(x.notes || '')}</textarea></label>`, {
+    onSave(f) {
+      const t = (k) => String(f.get(k) || '').trim(), tipus = f.get('tipus');
+      const ad = (a, d) => (a ? { artista: a, ...(d ? { disc: d } : {}) } : {});
+      const d = tipus === 'tematic' ? { tipus, tema: t('tema'), classic: {}, alternatiu: {}, notes: t('notes') }
+        : { tipus, tema: '', classic: ad(t('ca'), t('cd')), alternatiu: ad(t('aa'), t('ad')), notes: t('notes') };
+      if (tipus === 'tematic' ? !d.tema : !d.classic.artista) { toast(tipus === 'tematic' ? 'Posa el tema.' : 'Posa almenys el clàssic.'); return false; }
+      if (nou) state.propostes.push({ ...x, ...d, creada: ymd(new Date()), autor: esDavid() ? 'david' : 'angel' });
+      else Object.assign(x, d);
+      toast(nou ? "Proposta enviada a l'Angel." : 'Proposta desada.');
+    },
+    onDelete: nou ? null : () => {
+      if (!confirm('Retirar aquesta proposta?')) return false;
+      state.propostes = state.propostes.filter((p) => p.id !== x.id);
+      toast('Proposta retirada.');
+    },
+  });
+  const f = $('#dlgForm');
+  const mostra = () => { const tm = f.elements.tipus.value === 'tematic'; f.querySelector('.prop-dialeg').hidden = tm; f.querySelector('.prop-tematic').hidden = !tm; };
+  f.onchange = mostra; mostra();
+}
+// Acceptar: ocupa el primer diàleg (o temàtic) per decidir que encara no s'ha emès; si no n'hi ha, s'afegeix al final
+function acceptaProposta(id) {
+  const x = state.propostes.find((p) => p.id === id);
+  if (!x) return;
+  const pid = ui.planProg || bnId(), tipus = x.tipus === 'tematic' ? 'tematic' : 'dialeg';
+  const lliures = episodisPla(pid).filter((g) => !fet(g, 'emes') && g.tipusEp === tipus);
+  let g = tipus === 'tematic' ? lliures.find((e) => !e.tema) : lliures.find((e) => !e.classics?.[0]?.artista);
+  const nom = tipus === 'tematic' ? `Temàtic «${x.tema}»` : [x.classic?.artista, x.alternatiu?.artista].filter(Boolean).join(' ↔ ');
+  const lloc = g ? `Ocuparà l'episodi ${g.numero}${g.emissio ? ` (${dataCurta(g.emissio)})` : ''}, que estava per decidir.`
+    : `No queda cap ${tipus === 'tematic' ? 'temàtic' : 'diàleg'} per decidir: s'afegirà al final. Després fes «↻ Renumera».`;
+  if (!confirm(`Acceptar la proposta d'en David?\n\n${nom}\n\n${lloc}`)) return;
+  if (!g) {
+    g = nouEpPla(pid, tipus);
+    g.numero = Math.max(0, ...episodisPla(pid).map((e) => Number(e.numero) || 0)) + 1;
+    state.gravacions.push(g);
+  }
+  if (tipus === 'tematic') { g.tema = x.tema; g.titol = `Temàtic ${x.tema}`; }
+  else {
+    g.classics = [x.classic];
+    g.contemporanis = x.alternatiu?.artista ? [x.alternatiu] : [];
+    g.titol = titolDialeg({ classics: g.classics, contemporanis: g.contemporanis });
+  }
+  if (x.notes) g.notes = [g.notes, `Proposta d'en David: ${x.notes}`].filter(Boolean).join('\n');
+  Object.assign(x, { estat: 'acceptada', ep: g.numero, epId: g.id, resolta: ymd(new Date()) });
+  save(); render(); setTimeout(() => vesPla(g.id), 60);
+  toast(`Proposta acceptada: episodi ${g.numero}.`);
+}
+function descartaProposta(id) {
+  const x = state.propostes.find((p) => p.id === id);
+  if (!x || !confirm('Descartar aquesta proposta? En David la veurà com a descartada.')) return;
+  Object.assign(x, { estat: 'descartada', resolta: ymd(new Date()) });
+  save(); render();
+}
 
 function renderPlanificacio(m) {
   const p = prog(ui.planProg) || state.programes.find((x) => esMusical(x.id));
@@ -419,9 +535,10 @@ function renderPlanificacio(m) {
       <div class="grp"><button class="btn nav-btn" data-action="vista" data-v="programes" aria-label="Torna a Programes">‹</button><h2>Planificació</h2></div>
       <div class="grp">
         <input type="search" id="cercaPla" placeholder="Cerca artista, disc, tema…" value="${esc(ui.cercaPla || '')}">
-        <select data-filter="filtrePla" aria-label="Què es mostra">${[['tots', 'Tots els episodis'], ['pendents', 'Pendents d\'emetre'], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar']]
+        <select data-filter="filtrePla" aria-label="Què es mostra">${[['tots', 'Tots els episodis'], ['pendents', 'Pendents d\'emetre'], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar'], ...(esDavid() ? [] : [['david', 'Canviats per en David']])]
           .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
-        <button class="btn" data-action="renumera">↻ Renumera</button>
+        <button class="btn nomes-angel" data-action="renumera">↻ Renumera</button>
+        <button class="btn primary nomes-david" data-action="proposta">+ Proposta</button>
         <button class="btn" data-action="exporta-pla">⬇ Excel</button>
       </div>
     </div>
@@ -431,6 +548,7 @@ function renderPlanificacio(m) {
     <div class="legend pla-llegenda">${Object.entries(TIPUS_PLA).map(([k, t]) => `<span><span class="caixa t-${k}"></span>${t}</span>`).join('')}
       <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
       <span class="hint">${p.nom} · ${eps.length} episodis</span></div>
+    ${blocAvisos(p.id)}${blocPropostes()}
     <div id="plaLlista"></div>`;
   plaLlista();
 }
@@ -439,10 +557,11 @@ function plaLlista() {
   const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat'));
   const q = clauCerca(ui.cercaPla || ''), f = ui.filtrePla || 'tots';
   const rows = eps
-    .filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes')) || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')))
+    .filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes')) || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')) || (f === 'david' && g.david))
     .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, textMusica(g), g.notes].join(' ')).includes(w)));
   const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
-  const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '');
+  const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
+    + (g.david && !esDavid() ? `<span class="pla-marca david" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David</span>` : '');
   const taula = `<div class="panel pla-taula"><table>
     <thead><tr><th>Núm.</th><th>Tipus</th><th>Emissió</th><th>Clàssic / Títol</th><th>Alternatiu</th>${PLA_ESTATS.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
     <tbody>${rows.map((g) => { const [a, b] = columnesPla(g); return `<tr id="pla-${g.id}" class="t-${g.tipusEp} ${marca(g)}">
@@ -451,7 +570,7 @@ function plaLlista() {
       <td class="nowrap">${g.emissio ? dataCurta(g.emissio) : '—'}</td>
       <td class="pla-obre" data-action="edita" data-id="${g.id}">${a}</td>
       <td class="pla-obre" data-action="edita" data-id="${g.id}">${b}</td>
-      ${PLA_ESTATS.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : 'no'}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} aria-label="${k}"></td>`).join('')}
+      ${PLA_ESTATS.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : 'no'}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'} aria-label="${k}"></td>`).join('')}
       <td class="pla-notes">${esc(g.notes || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
   const targetes = `<div class="pla-cards">${rows.map((g) => { const [a, b] = columnesPla(g); return `<div id="plac-${g.id}" class="pla-card t-${g.tipusEp} ${marca(g)}">
       <button class="pla-cos" data-action="edita" data-id="${g.id}">
@@ -1149,7 +1268,7 @@ function llegeixVcard(text) {
 function renderConfig(m) {
   m.innerHTML = `
     ${typeof Sync !== 'undefined' ? Sync.html() : ''}
-    <div class="section">
+    <div class="section nomes-angel">
       <h2>Estudis i sales</h2>
       <p class="help">Els espais on es grava. L'app avisa si dues gravacions coincideixen al mateix estudi.</p>
       <div class="tags">${state.estudis.map((s, i) => `<span class="tag">${esc(s)}<button data-action="treu-estudi" data-i="${i}" aria-label="Treu ${esc(s)}">×</button></span>`).join('') || '<span class="empty">Cap estudi</span>'}</div>
@@ -1162,7 +1281,7 @@ function renderConfig(m) {
         <button class="btn">Desa les ubicacions</button>
       </form>` : ''}
     </div>
-    <div class="section">
+    <div class="section nomes-angel">
       <h2>Còpia de seguretat</h2>
       <p class="help">Descarrega una còpia de totes les dades en un fitxer, per guardar-la o per recuperar-la si cal.</p>
       <div class="grp">
@@ -1187,7 +1306,7 @@ function renderConfig(m) {
       <p class="help"><b>iPhone:</b> obre-la amb Safari, toca <b>Compartir</b> i després <b>Afegeix a la pantalla d'inici</b>.<br>
       <b>Ordinador:</b> a Chrome o Edge, fes clic a la icona d'instal·lar de la barra d'adreces.</p>
     </div>
-    <div class="section">
+    <div class="section nomes-angel">
       <h2>Zona perillosa</h2>
       <div class="grp">
         <button class="btn danger" data-action="esborra-tot">Esborra totes les dades</button>
@@ -1249,9 +1368,9 @@ function conflictes(g) {
 function openGravacio(g, dataPerDefecte) {
   const nou = !g;
   g = g || {
-    id: uid(), titol: '', programaId: ui.filtrePrograma || '', data: dataPerDefecte || ymd(new Date()),
+    id: uid(), titol: '', programaId: esDavid() ? bnId() : ui.filtrePrograma || '', data: dataPerDefecte || ymd(new Date()),
     hora: '10:00', durada: 60, estudi: state.estudis[0] || '', estat: 'pendent',
-    presentadors: [], tecnic: '', convidats: '', notes: '',
+    presentadors: [], tecnic: '', convidats: '', notes: '', ...(esDavid() ? { tipusEp: 'sessio' } : {}),
   };
   const estudis = [...new Set([...state.estudis, g.estudi].filter(Boolean))];
   openDialog(`
@@ -1335,6 +1454,15 @@ function openGravacio(g, dataPerDefecte) {
         if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
         else if (!dades.titol) dades.titol = m.tipusEp === 'sessio' ? SESSIO : m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
       }
+      // En David: el que no pot canviar es queda com estava (el servidor també ho comprova)
+      if (esDavid()) {
+        const numerat = !nou && NUMERATS.includes(g.tipusEp);
+        const fixos = numerat ? ['numero', 'tipusEp', 'programaId', 'emissio', 'horaEmissio', 'classics', 'tema', 'enllac', ...(g.tipusEp !== 'dialeg' ? ['titol', 'contemporanis'] : [])]
+          : ['numero', 'tipusEp', 'programaId'];
+        const base = nou ? { programaId: bnId(), tipusEp: 'sessio', numero: '' } : g;
+        fixos.forEach((k) => { if (k in base) dades[k] = base[k]; else delete dades[k]; });
+        if (numerat && g.tipusEp === 'dialeg') dades.titol = titolDialeg({ classics: g.classics || [], contemporanis: dades.contemporanis || [] }) || g.titol;
+      }
       // Entrevista: el camp de dalt és el convidat; és obligatori i en fa el títol
       const nomsConv = musical ? [] : [...new Set(dades.titol.split(',').map((x) => x.trim()).filter(Boolean))];
       if (!musical) dades.titol = nomsConv.join(', ');
@@ -1371,7 +1499,7 @@ function openGravacio(g, dataPerDefecte) {
       ui.diaSel = dataRef(dades);
       toast(noves.length > 1 ? `S'han creat ${noves.length} gravacions.` : 'Gravació desada.');
     },
-    onDelete: nou ? null : () => {
+    onDelete: nou || (esDavid() && (NUMERATS.includes(g.tipusEp) || fet(g, 'emes'))) ? null : () => {
       if (!confirm(`Eliminar la gravació «${g.titol}» del ${dataCurta(g.data || g.emissio)}?`)) return false;
       const seguents = g.serie ? state.gravacions.filter((x) => x.serie === g.serie && x.id !== g.id && (x.data || '') > (g.data || '')) : [];
       const totes = seguents.length && confirm(`Aquesta sessió es repeteix. Vols eliminar també les ${seguents.length} sessions següents de la sèrie?\n\nD'acord: totes les següents\nCancel·la: només aquesta`);
@@ -1420,7 +1548,27 @@ function openGravacio(g, dataPerDefecte) {
   f.oninput = comprova;
   f.onchange = comprova;
   comprova();
+  if (esDavid()) bloquejaDavid(f, g, nou);
   if (!mobil.matches && nou) f.elements.titol.focus();
+}
+// Perfil d'en David: bloqueja el que no pot canviar i ho explica a dalt del formulari
+function bloquejaDavid(f, g, nou) {
+  const avis = (txt) => f.querySelector('h3').insertAdjacentHTML('afterend', `<p class="nota-david">${txt}</p>`);
+  if (!nou && fet(g, 'emes')) {
+    f.querySelectorAll('input, select, textarea, [data-dlg="omple-pindola"], [data-dlg="copia"]').forEach((el) => { el.disabled = true; });
+    f.querySelector('button[type="submit"]').hidden = true;
+    avis("Aquest episodi ja és emès: el pots consultar, però només l'Angel el pot canviar.");
+    return;
+  }
+  const bloc = (el) => { if (!el) return; if (el.tagName === 'SELECT') { el.classList.add('bloquejat'); el.tabIndex = -1; } else el.readOnly = true; };
+  ['programaId', 'tipusEp', 'numero'].forEach((n) => bloc(f.elements[n]));
+  if (nou || !NUMERATS.includes(g.tipusEp)) { avis('Sessió de gravació de Blanc &amp; Negre.'); return; }
+  ['tema', 'emissio', 'horaEmissio', 'enllac'].forEach((n) => bloc(f.elements[n]));
+  f.querySelectorAll('[name^="c_art_"], [name^="c_disc_"]').forEach(bloc);
+  if (g.tipusEp !== 'dialeg') { bloc(f.elements.titol); f.querySelectorAll('[name^="k_art_"], [name^="k_disc_"]').forEach(bloc); }
+  f.querySelector('[data-dlg="omple-pindola"]')?.remove();
+  avis(g.tipusEp === 'dialeg' ? "Pots canviar l'alternatiu (artista i disc) i les dades de gravació. La resta només la canvia l'Angel."
+    : "Pots canviar les dades de gravació. El contingut només el canvia l'Angel.");
 }
 
 /* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
@@ -1551,6 +1699,7 @@ $('#main').addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
   const { action, id, date } = el.dataset;
+  if (esDavid() && NOMES_ANGEL.has(action)) return toast("Això només ho pot canviar l'Angel.");
   const c = ui.cursor;
   switch (action) {
     case 'prev': ui.cursor = ui.mode === 'mes' ? new Date(c.getFullYear(), c.getMonth() - 1, 1) : addDays(c, -7); break;
@@ -1578,6 +1727,10 @@ $('#main').addEventListener('click', (e) => {
     case 'ves-pla': return vesPla(id);
     case 'renumera': return renumera();
     case 'exporta-pla': return exportaPla();
+    case 'proposta': return openProposta(state.propostes.find((x) => x.id === id) || null);
+    case 'accepta-proposta': return acceptaProposta(id);
+    case 'descarta-proposta': return descartaProposta(id);
+    case 'avisos-vistos': return avisosVistos();
     case 'nova-persona': return openPersona(null);
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
@@ -1602,7 +1755,7 @@ $('#main').addEventListener('click', (e) => {
     case 'importa': return $('#fitxer').click();
     case 'esborra-tot':
       if (!confirm('Segur que vols esborrar TOTES les dades? Exporta-les abans si les vols conservar.')) return;
-      state = { programes: [], persones: [], estudis: [], ubicacions: {}, agenda: { contactes: [], importat: '' }, gravacions: [] }; save(); toast('Dades esborrades.'); break;
+      state = { programes: [], persones: [], estudis: [], ubicacions: {}, agenda: { contactes: [], importat: '' }, gravacions: [], propostes: [] }; save(); toast('Dades esborrades.'); break;
     case 'exemple':
       if (!confirm('Substituir les dades actuals per les inicials (els dos podcasts i l\'equip)?')) return;
       state = seed(); save(); break;
@@ -1615,6 +1768,7 @@ $('#main').addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.pla) {
     const g = state.gravacions.find((x) => x.id === t.dataset.pla);
+    if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió i Emès només els marca l'Angel."); return; }
     if (g) {
       g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
       save();
