@@ -656,7 +656,7 @@ body.a-portada main { display: none; }
   .pla-checks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px 8px 9px; }
   .pc { justify-content: center; padding: 4px 2px; gap: 3px; font-size: 11px; min-width: 0; }
   .pc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pc input { -webkit-appearance: none; appearance: none; flex: none; width: 13px; height: 13px; border: 1.5px solid #0E0E0E; border-radius: 3px; background: #fff; display: grid; place-content: center; }
-  .pc input:checked { background: #0E0E0E; }
-  .pc input:checked::after { content: ''; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
+  .pc input[type="checkbox"] { -webkit-appearance: none; appearance: none; flex: none; width: 13px; height: 13px; min-width: 0; min-height: 0; padding: 0; margin: 0; font-size: 0; border: 1.5px solid #0E0E0E; border-radius: 3px; background: #fff; display: grid; place-content: center; box-shadow: none; }
+  .pc input[type="checkbox"]:checked { background: #0E0E0E; }
+  .pc input[type="checkbox"]:checked::after { content: ''; width: 6px; height: 3px; border: solid #fff; border-width: 0 0 2px 2px; transform: rotate(-45deg) translate(1px, -1px); }
 }
