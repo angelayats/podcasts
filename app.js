@@ -366,7 +366,7 @@ function renderTaula() {
       <td>${esc(equip(g).join(', ') || '—')}</td>
       <td>${esc(nomsConvidats(g).join(', ') || '—')}</td>
       <td class="nowrap">${g.estat !== 'cancellat' ? checkBadge(g) : ''}</td>
-      <td><select data-estat="${g.id}" aria-label="Estat">${estatOptions(g.estat)}</select></td>
+      <td><select data-estat="${g.id}" aria-label="Estat" ${esDavid() ? 'disabled' : ''}>${estatOptions(g.estat)}</select></td>
       <td><button class="btn small" data-action="edita" data-id="${g.id}">Edita</button></td>
     </tr>`).join('')}</tbody></table></div>`;
   // Mòbil: targetes agrupades per dia
@@ -415,8 +415,8 @@ function columnesPla(g) {
   return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
 }
 const checksPla = (g) => PLA_ESTATS.map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'}><span>${nom}</span></label>`).join('');
-// En David no pot marcar Guió ni Emès, ni tocar res d'un episodi emès
-const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && k !== 'guio' && k !== 'emes');
+// En David no pot marcar Guió, Gravat ni Emès (l'estudi i l'edició els porta l'Angel), ni tocar res d'un episodi emès
+const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && k !== 'guio' && k !== 'gravat' && k !== 'emes');
 
 /* Canvis d'en David (els marca el servidor) i propostes de diàlegs i temàtics */
 const NOMS_CAMPS = { contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
@@ -1457,9 +1457,9 @@ function openGravacio(g, dataPerDefecte) {
       // En David: el que no pot canviar es queda com estava (el servidor també ho comprova)
       if (esDavid()) {
         const numerat = !nou && NUMERATS.includes(g.tipusEp);
-        const fixos = numerat ? ['numero', 'tipusEp', 'programaId', 'emissio', 'horaEmissio', 'classics', 'tema', 'enllac', ...(g.tipusEp !== 'dialeg' ? ['titol', 'contemporanis'] : [])]
-          : ['numero', 'tipusEp', 'programaId'];
-        const base = nou ? { programaId: bnId(), tipusEp: 'sessio', numero: '' } : g;
+        const fixos = numerat ? ['numero', 'tipusEp', 'programaId', 'estat', 'emissio', 'horaEmissio', 'classics', 'tema', 'enllac', ...(g.tipusEp !== 'dialeg' ? ['titol', 'contemporanis'] : [])]
+          : ['numero', 'tipusEp', 'programaId', 'estat'];
+        const base = nou ? { programaId: bnId(), tipusEp: 'sessio', numero: '', estat: 'pendent' } : g;
         fixos.forEach((k) => { if (k in base) dades[k] = base[k]; else delete dades[k]; });
         if (numerat && g.tipusEp === 'dialeg') dades.titol = titolDialeg({ classics: g.classics || [], contemporanis: dades.contemporanis || [] }) || g.titol;
       }
@@ -1561,14 +1561,14 @@ function bloquejaDavid(f, g, nou) {
     return;
   }
   const bloc = (el) => { if (!el) return; if (el.tagName === 'SELECT') { el.classList.add('bloquejat'); el.tabIndex = -1; } else el.readOnly = true; };
-  ['programaId', 'tipusEp', 'numero'].forEach((n) => bloc(f.elements[n]));
+  ['programaId', 'tipusEp', 'numero', 'estat'].forEach((n) => bloc(f.elements[n]));
   if (nou || !NUMERATS.includes(g.tipusEp)) { avis('Sessió de gravació de Blanc &amp; Negre.'); return; }
   ['tema', 'emissio', 'horaEmissio', 'enllac'].forEach((n) => bloc(f.elements[n]));
   f.querySelectorAll('[name^="c_art_"], [name^="c_disc_"]').forEach(bloc);
   if (g.tipusEp !== 'dialeg') { bloc(f.elements.titol); f.querySelectorAll('[name^="k_art_"], [name^="k_disc_"]').forEach(bloc); }
   f.querySelector('[data-dlg="omple-pindola"]')?.remove();
-  avis(g.tipusEp === 'dialeg' ? "Pots canviar l'alternatiu (artista i disc) i les dades de gravació. La resta només la canvia l'Angel."
-    : "Pots canviar les dades de gravació. El contingut només el canvia l'Angel.");
+  avis(g.tipusEp === 'dialeg' ? "Pots canviar l'alternatiu (artista i disc) i el dia i l'hora de gravació. La resta només la canvia l'Angel."
+    : "Pots canviar el dia i l'hora de gravació. El contingut només el canvia l'Angel.");
 }
 
 /* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
@@ -1768,7 +1768,7 @@ $('#main').addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.pla) {
     const g = state.gravacions.find((x) => x.id === t.dataset.pla);
-    if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió i Emès només els marca l'Angel."); return; }
+    if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat i Emès només els marca l'Angel."); return; }
     if (g) {
       g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
       save();
@@ -1778,7 +1778,7 @@ $('#main').addEventListener('change', (e) => {
   }
   if (t.dataset.estat) {
     const g = state.gravacions.find((x) => x.id === t.dataset.estat);
-    if (g) { g.estat = t.value; save(); renderTaula(); }
+    if (g && !esDavid()) { g.estat = t.value; save(); renderTaula(); }
     return;
   }
   const f = t.dataset.filter;
