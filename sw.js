@@ -1,10 +1,10 @@
 // Service worker: permet obrir l'app sense connexió i instal·lar-la.
 // Quan canviïs fitxers de l'app, puja el número de VERSIO perquè els dispositius s'actualitzin.
-const VERSIO = 'podcasts-v53';
+const VERSIO = 'podcasts-v54';
 const FITXERS = [
   './', 'index.html', 'styles.css', 'app.js', 'sync.js', 'config.js', 'manifest.webmanifest',
   'img/icona.svg', 'img/icona-180.png', 'img/icona-192.png', 'img/icona-512.png', 'img/favicon-32.png',
-  'img/la-cara-oculta-de-la-lluna.jpg', 'img/blanc-i-negre.jpg', 'invitacio-la-cara-oculta.pdf',
+  'img/la-cara-oculta-de-la-lluna.jpg', 'img/blanc-i-negre.jpg', 'img/capcalera-blanc-i-negre.png', 'invitacio-la-cara-oculta.pdf',
 ];
 // Fitxers externs que també es guarden per funcionar sense connexió
 const EXTERNS = ['fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com'];

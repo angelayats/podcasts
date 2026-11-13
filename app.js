@@ -422,6 +422,7 @@ function renderPlanificacio(m) {
         <select data-filter="filtrePla" aria-label="Què es mostra">${[['tots', 'Tots els episodis'], ['pendents', 'Pendents d\'emetre'], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar']]
           .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button class="btn" data-action="renumera">↻ Renumera</button>
+        <button class="btn" data-action="exporta-pla">⬇ Excel</button>
       </div>
     </div>
     <div class="pla-tauler">${tauler.map(([k, nom, g]) => `<button class="pla-t pla-t-${k}" ${g ? `data-action="ves-pla" data-id="${g.id}"` : ''}>
@@ -530,6 +531,124 @@ function renumera() {
   const fora = new Set(r.sobrants.map((g) => g.id));
   state.gravacions = state.gravacions.filter((g) => !fora.has(g.id));
   save(); render(); toast('Planificació renumerada.');
+}
+
+// Exporta la planificació a un Excel com el de treball: logo, tauler, colors i caselles (☑ / ☐)
+const EXCELJS = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+let exceljsCarregat = null;
+const carregaExceljs = () => exceljsCarregat || (exceljsCarregat = new Promise((ok, ko) => {
+  const sc = Object.assign(document.createElement('script'), { src: EXCELJS, onload: () => ok(window.ExcelJS), onerror: () => { exceljsCarregat = null; ko(); } });
+  document.head.append(sc);
+}));
+async function exportaPla() {
+  const p = prog(ui.planProg);
+  const eps = p ? episodisPla(p.id) : [];
+  if (!eps.length) return toast('No hi ha episodis per exportar.');
+  toast("Preparant l'Excel…");
+  let ExcelJS;
+  try { ExcelJS = await carregaExceljs(); } catch (e) { return toast("No s'ha pogut preparar l'Excel. Comprova la connexió."); }
+  const SI = '☑', NO = '☐';
+  const C = { dialeg: 'BFD7F5', pindola: 'FFDB70', tematic: 'D2B6F0', enviar: 'FF7A1F', gravar: '1F66C9', guio: '6E4FC0',
+    emes: '9FDB95', gravat: '7FB0EE', pendent: 'F4AFAF', guioSi: 'B99DE6', validat: 'FFC94D', cap: '111111' };
+  const ple = (c) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c }, bgColor: { argb: 'FF' + c } });
+  const linia = { style: 'thin', color: { argb: 'FFD0D0D0' } }, vores = { top: linia, bottom: linia, left: linia, right: linia };
+  const wb = new ExcelJS.Workbook();
+  wb.creator = APP.nom; wb.calcProperties.fullCalcOnLoad = true;
+  const sh = wb.addWorksheet('Planificació', {
+    views: [{ state: 'frozen', ySplit: 9 }],
+    pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '9:9' },
+  });
+  const amples = [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 30];
+  sh.columns = amples.map((width) => ({ width }));
+  const F0 = 10, ult = F0 + eps.length - 1;
+
+  // Capçalera: el logo de Blanc & Negre ocupa d'A a M
+  try {
+    const buffer = await fetch('img/capcalera-blanc-i-negre.png').then((r) => r.arrayBuffer());
+    sh.addImage(wb.addImage({ buffer, extension: 'png' }), { tl: { col: 0, row: 0 }, br: { col: 13, row: 1 }, editAs: 'twoCell' });
+  } catch (e) { sh.getCell('A1').value = p.nom; }
+  sh.getRow(1).height = 148.5;
+  sh.getCell('A2').value = 'Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Emissió cada dissabte; juliol i agost, vacances.';
+  sh.getCell('A2').font = { italic: true, color: { argb: 'FF666666' } };
+  sh.getCell('A3').value = `Exportat de l'app el ${dataCurta(ymd(new Date()))}`;
+  sh.getCell('A3').font = { italic: true, size: 9, color: { argb: 'FF888888' } };
+
+  // Tauler: es recalcula sol quan es canvien les caselles
+  const R = (c) => `$${c}$${F0}:$${c}$${ult}`, M = (c) => `MATCH("${NO}",${R(c)},0)`;
+  const nomEp = (g) => (g.tipusEp === 'dialeg' ? g.classics?.[0]?.artista || g.titol : g.titol);
+  const primer = (k) => eps.find((g) => !fet(g, k));
+  const resultat = (g, ambData) => (g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + g.emissio.split('-').reverse().map(Number).join('/') : ''} · ${nomEp(g)}` : '—');
+  [["Enviar a l'emissora", C.enviar, 'L', true], ['Proper a gravar', C.gravar, 'K', false], ['Proper guió', C.guio, 'J', false]].forEach(([nom, col, k, ambData], i) => {
+    const r = 4 + i;
+    sh.mergeCells(r, 1, r, 3); sh.mergeCells(r, 4, r, 7);
+    Object.assign(sh.getCell(r, 1), { value: nom, fill: ple(col), font: { bold: true, color: { argb: 'FFFFFFFF' } }, alignment: { vertical: 'middle', indent: 1 } });
+    const data = ambData ? `&" · "&DAY(INDEX(${R('C')},${M(k)}))&"/"&MONTH(INDEX(${R('C')},${M(k)}))&"/"&YEAR(INDEX(${R('C')},${M(k)}))` : '';
+    sh.getCell(r, 4).value = { formula: `IFERROR("Ep. "&INDEX(${R('A')},${M(k)})${data}&" · "&INDEX(${R('D')},${M(k)}),"—")`,
+      result: resultat(primer({ L: 'emes', K: 'gravat', J: 'guio' }[k]), ambData) };
+    sh.getCell(r, 4).font = { bold: true, size: 12 };
+    sh.getRow(r).height = 20;
+  });
+  // Llegenda
+  [['Diàleg', C.dialeg], ['Píndola', C.pindola], ['Temàtic', C.tematic], ['Emès', C.emes], ['Gravat', C.gravat], ['Pendent', C.pendent]].forEach(([t, col], i) => {
+    const r = 4 + Math.floor(i / 3), c = 8 + (i % 3) * 2;
+    sh.mergeCells(r, c, r, c + 1);
+    Object.assign(sh.getCell(r, c), { value: t, fill: ple(col), border: vores, alignment: { horizontal: 'center' } });
+  });
+
+  // Capçalera de la taula i files
+  const cap = ['Núm.', 'Tipus', 'Data emissió', 'Artista clàssic / Títol', 'Disc clàssic / Tema', 'Artista contemporani', 'Disc contemporani', 'Validat', 'Canvi', 'Guió', 'Gravat', 'Emès', 'Notes'];
+  const fc = sh.getRow(F0 - 1);
+  cap.forEach((t, i) => Object.assign(fc.getCell(i + 1), { value: t, fill: ple(C.cap), font: { bold: true, color: { argb: 'FFFFFFFF' } }, border: vores,
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true } }));
+  fc.height = 30;
+  eps.forEach((g, i) => {
+    const r = sh.getRow(F0 + i), t = g.tipusEp;
+    const data = g.emissio ? new Date(Date.UTC(...g.emissio.split('-').map((x, j) => Number(x) - (j === 1 ? 1 : 0)))) : null;
+    const [c0, n0] = [g.classics?.[0] || {}, g.contemporanis?.[0] || {}];
+    const vals = t === 'dialeg' ? [c0.artista || '', c0.disc || '', n0.artista || '', n0.disc || '']
+      : t === 'pindola' ? [g.titol || 'Píndola resum', (g.classics || []).map((a) => a.artista).filter(Boolean).join(', '), '', '']
+        : ['Temàtic', g.tema || '', '', ''];
+    r.values = [g.numero, TIPUS_PLA[t], data, ...vals, ...PLA_ESTATS.map(([k]) => (fet(g, k) ? SI : NO)), g.notes || ''];
+    r.eachCell({ includeEmpty: true }, (cel, c) => {
+      cel.fill = ple(C[t]); cel.border = vores;
+      cel.alignment = { vertical: 'middle', horizontal: [1, 2, 3, 8, 9, 10, 11, 12].includes(c) ? 'center' : 'left', wrapText: c === 13 };
+    });
+    r.getCell(3).numFmt = 'dd/mm/yyyy';
+    r.getCell(4).font = { bold: true, italic: t !== 'dialeg' };
+    if (t === 'dialeg') r.getCell(6).font = { bold: true };
+    for (let c = 8; c <= 12; c++) {
+      r.getCell(c).font = { size: 13 };
+      r.getCell(c).dataValidation = { type: 'list', allowBlank: false, formulae: [`"${SI},${NO}"`] };
+    }
+  });
+
+  // Colors que canvien sols: fila a enviar (taronja), fila a gravar (blau) i caselles d'estat
+  const cfFill = (col) => ({ fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: 'FF' + col } } });
+  const zona = `A${F0}:M${ult}`;
+  sh.addConditionalFormatting({ ref: zona, rules: [
+    { type: 'expression', priority: 1, stopIfTrue: true, formulae: [`AND($L${F0}="${NO}",COUNTIF($L$${F0 - 1}:$L${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.enviar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
+    { type: 'expression', priority: 2, stopIfTrue: true, formulae: [`AND($K${F0}="${NO}",COUNTIF($K$${F0 - 1}:$K${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.gravar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
+  ] });
+  [['L', C.emes], ['K', C.gravat], ['J', C.guioSi]].forEach(([k, col], i) => sh.addConditionalFormatting({ ref: `${k}${F0}:${k}${ult}`, rules: [
+    { type: 'expression', priority: 3 + i * 2, formulae: [`$${k}${F0}="${SI}"`], style: cfFill(col) },
+    { type: 'expression', priority: 4 + i * 2, formulae: [`$${k}${F0}="${NO}"`], style: cfFill(C.pendent) },
+  ] }));
+  sh.addConditionalFormatting({ ref: `H${F0}:I${ult}`, rules: [{ type: 'expression', priority: 9, formulae: [`H${F0}="${SI}"`], style: cfFill(C.validat) }] });
+  sh.autoFilter = { from: { row: F0 - 1, column: 1 }, to: { row: ult, column: 13 } };
+
+  // Desa o comparteix (al iPhone, el full de compartir permet desar-lo a Fitxers o enviar-lo)
+  const buf = await wb.xlsx.writeBuffer();
+  const nom = `Blanc-i-Negre-Planificacio-${ymd(new Date())}.xlsx`;
+  const tipus = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const fitxer = new File([buf], nom, { type: tipus });
+  if (mobil.matches && navigator.canShare?.({ files: [fitxer] })) {
+    try { await navigator.share({ files: [fitxer] }); } catch (e) { /* cancel·lat */ }
+    return;
+  }
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([buf], { type: tipus })), download: nom });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Excel descarregat.');
 }
 
 /* ---------- Estadístiques ---------- */
@@ -1458,6 +1577,7 @@ $('#main').addEventListener('click', (e) => {
     case 'vista': ui.view = el.dataset.v; render(); window.scrollTo(0, 0); return;
     case 'ves-pla': return vesPla(id);
     case 'renumera': return renumera();
+    case 'exporta-pla': return exportaPla();
     case 'nova-persona': return openPersona(null);
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'edita-persona': return openPersona(pers(id));
