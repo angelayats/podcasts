@@ -449,7 +449,7 @@ const checksPla = (g) => estatsPla(g.programaId).map(([k, nom]) => `<label class
 const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && (k === 'validat' || k === 'canvi'));
 
 /* Canvis d'en David (els marca el servidor) i propostes de diàlegs i temàtics */
-const NOMS_CAMPS = { contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
+const NOMS_CAMPS = { classics: 'cançons dels clàssics', contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
   presentadors: 'equip', tecnic: 'tècnic', notes: 'notes', checklist: 'checklist', pla: 'caselles', nova: 'sessió nova', esborrada: 'esborrada' };
 const avisosDavid = (pid) => (esDavid() ? [] : state.gravacions.filter((g) => g.david && g.programaId === pid)
   .sort((a, b) => (Number(a.numero) || 1e6) - (Number(b.numero) || 1e6) || ordena(a, b)));
@@ -1738,8 +1738,17 @@ function openGravacio(g, dataPerDefecte) {
       // En David: el que no pot canviar es queda com estava (el servidor també ho comprova)
       if (esDavid()) {
         const numerat = !nou && NUMERATS.includes(g.tipusEp);
-        const fixos = numerat ? ['numero', 'tipusEp', 'programaId', 'estat', 'emissio', 'horaEmissio', 'classics', 'tema', 'enllac', ...(g.tipusEp !== 'dialeg' ? ['titol', 'contemporanis'] : [])]
+        const fixos = numerat ? ['numero', 'tipusEp', 'programaId', 'estat', 'emissio', 'horaEmissio', 'tema', 'enllac', ...(g.tipusEp === 'dialeg' ? ['classics'] : ['titol'])]
           : ['numero', 'tipusEp', 'programaId', 'estat'];
+        // Píndoles i temàtics: els artistes clàssics no canvien; només se'n posen les cançons
+        if (numerat && g.tipusEp !== 'dialeg') {
+          dades.classics = (g.classics || []).map((a, i) => {
+            const n = dades.classics?.[i];
+            if (!n || n.artista !== a.artista) return a;
+            const { canco, url, ...resta } = a;
+            return { ...resta, ...(n.canco ? { canco: n.canco } : {}), ...(n.url ? { url: n.url } : {}) };
+          });
+        }
         const base = nou ? { programaId: bnId(), tipusEp: 'sessio', numero: '', estat: 'pendent' } : g;
         fixos.forEach((k) => { if (k in base) dades[k] = base[k]; else delete dades[k]; });
         if (numerat && g.tipusEp === 'dialeg') dades.titol = titolDialeg({ classics: g.classics || [], contemporanis: dades.contemporanis || [] }) || g.titol;
@@ -1887,7 +1896,8 @@ function activaCercaMusica(f) {
         const tria = (b, e) => {
           e.preventDefault();
           const x = res[Number(b.dataset.j)];
-          art.value = x.artistName; inp.value = netejaTitol(x.trackName); url.value = x.trackViewUrl || '';
+          if (!art.readOnly) art.value = x.artistName;
+          inp.value = netejaTitol(x.trackName); url.value = x.trackViewUrl || '';
           llista.hidden = true; mostraEscolta();
           f.dispatchEvent(new Event('input'));
         };
@@ -1898,7 +1908,7 @@ function activaCercaMusica(f) {
     inp.addEventListener('focus', () => { if (inp.value.trim().length >= 2 && !url.value) cerca(); });
     inp.addEventListener('blur', () => setTimeout(() => { llista.hidden = true; }, 400));
     // També es pot cercar escrivint l'artista: surten les seves cançons
-    art.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 500); });
+    if (!art.readOnly) art.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 500); });
     art.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== inp) llista.hidden = true; }, 400));
   });
 }
@@ -1916,10 +1926,10 @@ function bloquejaDavid(f, g, nou) {
   if (nou || !NUMERATS.includes(g.tipusEp)) { avis('Sessió de gravació de Blanc &amp; Negre.'); return; }
   ['tema', 'emissio', 'horaEmissio', 'enllac'].forEach((n) => bloc(f.elements[n]));
   f.querySelectorAll('[name^="c_art_"], [name^="c_disc_"]').forEach(bloc);
-  if (g.tipusEp !== 'dialeg') { bloc(f.elements.titol); f.querySelectorAll('[name^="k_art_"], [name^="k_disc_"]').forEach(bloc); }
+  if (g.tipusEp !== 'dialeg') bloc(f.elements.titol);
   f.querySelector('[data-dlg="omple-pindola"]')?.remove();
   avis(g.tipusEp === 'dialeg' ? "Pots canviar l'alternatiu (artista i disc) i el dia i l'hora de gravació. La resta només la canvia l'Angel."
-    : "Pots canviar el dia i l'hora de gravació. El contingut només el canvia l'Angel.");
+    : "Pots posar els artistes alternatius i les cançons de tots els artistes, i el dia i l'hora de gravació. Els artistes clàssics i el tema només els canvia l'Angel.");
 }
 
 /* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
