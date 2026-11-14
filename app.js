@@ -409,16 +409,18 @@ function renderProgrames(m) {
    La cara oculta de la lluna (entrevista): un convidat per programa, amb 4 cançons. Cada dijous.
    Tots dos: juliol i agost, vacances. */
 const PLA_ESTATS = [['validat', 'Validat'], ['canvi', 'Canvi'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['emes', 'Emès']];
-const ESTATS_ENTREVISTA = [['confirmat', 'Confirmat'], ['cancons', 'Cançons'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['editat', 'Editat'], ['emes', 'Emès'], ['noticia', 'Notícia']];
+const ESTATS_ENTREVISTA = [['confirmat', 'Confirmat'], ['cancons', 'Cançons'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['editat', 'Editat'], ['enviat', 'Enviat'], ['emes', 'Emès'], ['noticia', 'Notícia']];
+// Quina casella diu que ja s'ha enviat a l'emissora: a les entrevistes, «Enviat»; a Blanc & Negre, «Emès»
+const kEnvia = (pid = ui.planProg) => (esMusical(pid) ? 'emes' : 'enviat');
 const TIPUS_PLA = { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic', entrevista: 'Entrevista' };
 const estatsPla = (pid = ui.planProg) => (esMusical(pid) ? PLA_ESTATS : ESTATS_ENTREVISTA);
 const tipusPla = (g) => (esMusical(g.programaId) ? g.tipusEp : 'entrevista');
 // Caselles que surten en vermell clar mentre no estan fetes
-const rosaPla = (k, pid = ui.planProg) => (esMusical(pid) ? ['guio', 'gravat', 'emes'] : ['confirmat', 'cancons', 'guio', 'gravat', 'editat', 'emes']).includes(k);
+const rosaPla = (k, pid = ui.planProg) => (esMusical(pid) ? ['guio', 'gravat', 'emes'] : ['confirmat', 'cancons', 'guio', 'gravat', 'editat', 'enviat', 'emes']).includes(k);
 const capPla = (pid = ui.planProg) => (esMusical(pid) ? ['Clàssic / Títol', 'Alternatiu'] : ['Convidat', 'Cançons']);
 const episodisPla = (pid) => state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && TIPUS_PLA[tipusPla(g)] && (esMusical(pid) || g.estat !== 'cancellat'))
   .sort((a, b) => a.numero - b.numero);
-const fet = (g, k) => Boolean(g.pla?.[k]);
+const fet = (g, k) => Boolean(g.pla?.[k] || (k === 'enviat' && g.pla?.emes));   // un programa emès ja s'havia enviat
 const artDisc = (a) => (a?.artista ? `<b>${esc(a.artista)}</b>${a.disc ? ' · ' + esc(a.disc) : ''}` : '');
 const artCanco = (ll) => (ll || []).filter((a) => a.artista || a.canco).map((a) => `${esc(a.artista || '')}${a.canco ? ` <i>«${esc(a.canco)}»</i>` : ''}`).join(', ');
 const textCanco = (ll) => (ll || []).filter((a) => a.artista || a.canco).map((a) => `${a.artista || ''}${a.canco ? ` «${a.canco}»` : ''}`.trim());
@@ -437,7 +439,7 @@ function iniciaPlaEntrevista(pid) {
   episodisPla(pid).filter((g) => !g.pla).forEach((g) => {
     const r = ['pendent', 'confirmat', 'gravat', 'editat', 'publicat'].indexOf(g.estat);
     g.pla = { confirmat: r >= 1, cancons: r >= 2, guio: r >= 2 || Boolean(g.checklist?.guio), gravat: r >= 2,
-      editat: r >= 3 || Boolean(g.checklist?.editat), emes: r >= 4, noticia: Boolean(g.enllac) };
+      editat: r >= 3 || Boolean(g.checklist?.editat), enviat: r >= 4, emes: r >= 4, noticia: Boolean(g.enllac) };
     canvi = true;
   });
   return canvi;
@@ -563,7 +565,7 @@ function renderPlanificacio(m) {
   const musical = esMusical(p.id);
   if (!musical && iniciaPlaEntrevista(p.id)) save();
   const eps = episodisPla(p.id);
-  const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat')), guio = eps.find((g) => !fet(g, 'guio'));
+  const env = eps.find((g) => !fet(g, kEnvia(p.id))), grav = eps.find((g) => !fet(g, 'gravat')), guio = eps.find((g) => !fet(g, 'guio'));
   const tauler = [['enviar', "Enviar a l'emissora", env], ['gravar', 'Proper a gravar', grav], ['guio', 'Proper guió', guio]];
   const filtres = [...filtresPla(p.id), ...(musical && !esDavid() ? [['david', 'Canviats per en David']] : [])];
   if (!filtres.some(([v]) => v === ui.filtrePla)) ui.filtrePla = 'tots';
@@ -592,7 +594,7 @@ function renderPlanificacio(m) {
 function plaLlista() {
   const pid = ui.planProg, musical = esMusical(pid), est = estatsPla(pid), [capA, capB] = capPla(pid);
   const eps = episodisPla(pid);
-  const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat'));
+  const env = eps.find((g) => !fet(g, kEnvia(pid))), grav = eps.find((g) => !fet(g, 'gravat'));
   const q = clauCerca(ui.cercaPla || ''), f = ui.filtrePla || 'tots';
   const rows = filtraPla(eps, f)
     .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, g.descripcio, textMusica(g), textCanco(g.cancons).join(' '), g.notes].join(' ')).includes(w)));
@@ -741,7 +743,7 @@ async function exportaPla(eps) {
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '9:9' },
   });
   // Columnes: musical = Núm · Tipus · Data · 4 de música · 5 caselles · Notes; entrevista = Núm · Data · Convidat · Qui és · Cançons · 7 caselles · Notes
-  const amples = musical ? [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 30] : [7, 13, 24, 32, 52, 11, 10, 8, 9, 9, 8, 10, 30];
+  const amples = musical ? [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 30] : [7, 13, 24, 32, 48, 11, 10, 8, 9, 9, 9, 8, 10, 30];
   const nCols = amples.length, cEst = musical ? 8 : 6;
   const lletra = (n) => String.fromCharCode(64 + n);
   const colK = (k) => lletra(cEst + est.findIndex(([x]) => x === k));
@@ -774,7 +776,7 @@ async function exportaPla(eps) {
   const nomEp = (g) => (g.tipusEp === 'dialeg' ? g.classics?.[0]?.artista || g.titol : g.titol);
   const primer = (k) => eps.find((g) => !fet(g, k));
   const resultat = (g, ambData) => (g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + g.emissio.split('-').reverse().map(Number).join('/') : ''} · ${nomEp(g)}` : '—');
-  [["Enviar a l'emissora", C.enviar, 'emes', true], ['Proper a gravar', C.gravar, 'gravat', false], ['Proper guió', C.guio, 'guio', false]].forEach(([nom, col, k, ambData], i) => {
+  [["Enviar a l'emissora", C.enviar, kEnvia(p.id), true], ['Proper a gravar', C.gravar, 'gravat', false], ['Proper guió', C.guio, 'guio', false]].forEach(([nom, col, k, ambData], i) => {
     const r = 4 + i, ck = colK(k);
     sh.mergeCells(r, 1, r, 3); sh.mergeCells(r, 4, r, 7);
     Object.assign(sh.getCell(r, 1), { value: nom, fill: ple(col), font: { bold: true, color: { argb: 'FFFFFFFF' } }, alignment: { vertical: 'middle', indent: 1 } });
@@ -824,7 +826,7 @@ async function exportaPla(eps) {
 
   // Colors que canvien sols: fila a enviar (taronja), fila a gravar (blau) i caselles d'estat
   const cfFill = (col) => ({ fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: 'FF' + col } } });
-  const zona = `A${F0}:${lletra(nCols)}${ult}`, kE = colK('emes'), kG = colK('gravat');
+  const zona = `A${F0}:${lletra(nCols)}${ult}`, kE = colK(kEnvia(p.id)), kG = colK('gravat');
   sh.addConditionalFormatting({ ref: zona, rules: [
     { type: 'expression', priority: 1, stopIfTrue: true, formulae: [`AND($${kE}${F0}="${NO}",COUNTIF($${kE}$${F0 - 1}:$${kE}${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.enviar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
     { type: 'expression', priority: 2, stopIfTrue: true, formulae: [`AND($${kG}${F0}="${NO}",COUNTIF($${kG}$${F0 - 1}:$${kG}${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.gravar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
@@ -888,7 +890,7 @@ function filaPla(g) {
 }
 const taulerPla = (eps) => {
   const nomEp = (g) => (g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? `Temàtic ${g.tema || ''}`.trim() : g.titol);
-  return [["Enviar a l'emissora", 'emes', '#FF7A1F', true], ['Proper a gravar', 'gravat', '#1F66C9'], ['Proper guió', 'guio', '#6E4FC0']].map(([nom, k, col, ambData]) => {
+  return [["Enviar a l'emissora", kEnvia(), '#FF7A1F', true], ['Proper a gravar', 'gravat', '#1F66C9'], ['Proper guió', 'guio', '#6E4FC0']].map(([nom, k, col, ambData]) => {
     const g = eps.find((x) => !fet(x, k));
     return { nom, col, g, text: g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + dataNum(g.emissio) : ''} · ${nomEp(g)}` : 'Tot fet' };
   });
@@ -896,7 +898,7 @@ const taulerPla = (eps) => {
 const slugPla = () => (prog(ui.planProg)?.nom || 'Planificacio').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, 'i').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const nomFitxerPla = (ext) => `${slugPla()}-Planificacio-${ymd(new Date())}.${ext}`;
 const COL_TIPUS = { dialeg: '#BFD7F5', pindola: '#FFDB70', tematic: '#D2B6F0', entrevista: '#D6DCEC' };
-const COL_FET = { validat: '#FFC94D', canvi: '#FFC94D', confirmat: '#FFC94D', cancons: '#9FD9C9', guio: '#B99DE6', gravat: '#7FB0EE', editat: '#7FD0D6', emes: '#9FDB95', noticia: '#D9D46E' };
+const COL_FET = { enviat: '#FFB27A', validat: '#FFC94D', canvi: '#FFC94D', confirmat: '#FFC94D', cancons: '#9FD9C9', guio: '#B99DE6', gravat: '#7FB0EE', editat: '#7FD0D6', emes: '#9FDB95', noticia: '#D9D46E' };
 
 // Desa o comparteix un fitxer (al mòbil, el full de compartir: WhatsApp, Mail, Fitxers…)
 async function lliuraFitxer(blob, nom) {
@@ -959,13 +961,13 @@ async function pdfPla(eps) {
     doc.setFontSize(9.5); doc.text(doc.splitTextToSize(x.text, bw - 6)[0], bx + 3, y + 9.5);
   });
   y += 16;
-  const env = episodisPla(ui.planProg).find((g) => !fet(g, 'emes')), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
+  const env = episodisPla(ui.planProg).find((g) => !fet(g, kEnvia())), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
   const files = eps.map(filaPla);
   const off = musical ? 5 : 4;                                  // primera columna de caselles
   const amplaEst = 13;
   const estils = musical
     ? { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 62 } }
-    : { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 18, halign: 'center' }, 2: { cellWidth: 58 }, 3: { cellWidth: 66 } };
+    : { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 18, halign: 'center' }, 2: { cellWidth: 52 }, 3: { cellWidth: 60 } };
   est.forEach((_, i) => { estils[off + i] = { cellWidth: amplaEst }; });
   estils[off + est.length] = { cellWidth: 'auto', fontSize: 7, textColor: [80, 80, 80] };
   doc.autoTable({
@@ -1011,7 +1013,7 @@ function imprimeixPla(eps) {
   let z = $('#zonaImpressio');
   if (!z) { z = Object.assign(document.createElement('div'), { id: 'zonaImpressio' }); document.body.append(z); }
   const p = prog(ui.planProg), musical = esMusical(p.id), est = estatsPla(p.id), [capA, capB] = capPla(p.id);
-  const env = episodisPla(ui.planProg).find((g) => !fet(g, 'emes')), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
+  const env = episodisPla(ui.planProg).find((g) => !fet(g, kEnvia())), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
   const linies = (ll, primeraNegreta) => ll.map((x, i) => (i === 0 && primeraNegreta ? `<b>${esc(x)}</b>` : esc(x))).join('<br>');
   z.className = 'pla';
   z.innerHTML = `${musical ? '<img class="zp-logo" src="img/capcalera-blanc-i-negre.png" alt="Blanc & Negre">'

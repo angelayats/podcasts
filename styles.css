@@ -738,3 +738,7 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .cv-escolta { font-size: 12px; justify-self: start; align-self: center; text-decoration: none; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); }
 .cv-escolta[hidden] { display: none !important; }
 .cancons-conv .cv-fila .cv-escolta { grid-column: 2; }
+:root { --pc-enviat: #FFB27A; }
+.pcel.si.pc-enviat { background: var(--pc-enviat); }
+.pcel.no.pc-enviat { background: color-mix(in srgb, var(--pc-pendent) 70%, transparent); }
+.pc-enviat:has(input:checked) { background: var(--pc-enviat); color: #0E0E0E; }
