@@ -352,6 +352,7 @@ const Sync = (() => {
     clau = llegeixClau();
     if (canviClau && meta.ultima) reinicia();
     client();
+    addEventListener('hashchange', () => { if (/clau=/.test(location.hash)) location.reload(); });   // s'enganxa un enllaç amb clau a l'app oberta
     addEventListener('online', () => programa(0));
     addEventListener('offline', () => posaEstat('offline'));
     addEventListener('focus', () => programa(0));
