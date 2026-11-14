@@ -429,13 +429,14 @@ function columnesPla(g) {
   if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}${g.classics?.length ? ' · ' + artCanco(g.classics) : ''}`, artCanco(g.contemporanis)];
   return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
 }
-// Primera vegada que s'obre la planificació d'una entrevista: les caselles surten de l'estat, del checklist i de la notícia
+// Primera vegada que s'obre la planificació d'una entrevista: les caselles surten de l'estat, del checklist i de la notícia.
+// «Confirmat» vol dir confirmat amb data de gravació: només si l'estat ja és Confirmat o més enllà
 function iniciaPlaEntrevista(pid) {
   if (esDavid()) return false;
   let canvi = false;
   episodisPla(pid).filter((g) => !g.pla).forEach((g) => {
     const r = ['pendent', 'confirmat', 'gravat', 'editat', 'publicat'].indexOf(g.estat);
-    g.pla = { confirmat: r >= 1 || Boolean(g.checklist?.convidat), cancons: r >= 2, guio: r >= 2 || Boolean(g.checklist?.guio), gravat: r >= 2,
+    g.pla = { confirmat: r >= 1, cancons: r >= 2, guio: r >= 2 || Boolean(g.checklist?.guio), gravat: r >= 2,
       editat: r >= 3 || Boolean(g.checklist?.editat), emes: r >= 4, noticia: Boolean(g.enllac) };
     canvi = true;
   });
