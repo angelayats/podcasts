@@ -1646,7 +1646,8 @@ function openGravacio(g, dataPerDefecte) {
     <fieldset class="nomes-entrevista cancons-conv"><legend>🎵 Convidat i cançons</legend>
       <label>Qui és <input name="descripcio" value="${esc(g.descripcio || '')}" placeholder="Ex.: Pilot de rescat de l'hospital Trueta" autocomplete="off"></label>
       ${[0, 1, 2, 3].map((i) => `<div class="cv-fila"><input name="cv_art_${i}" value="${esc(g.cancons?.[i]?.artista || '')}" placeholder="Artista ${i + 1}" autocomplete="off">
-        <input name="cv_canco_${i}" value="${esc(g.cancons?.[i]?.canco || '')}" placeholder="Cançó" autocomplete="off"></div>`).join('')}
+        <input name="cv_canco_${i}" value="${esc(g.cancons?.[i]?.canco || '')}" placeholder="Cançó (escriu i tria)" autocomplete="off">
+        <input type="hidden" name="cv_url_${i}" value="${esc(g.cancons?.[i]?.url || '')}"></div>`).join('')}
     </fieldset>
     <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
       <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || (g.numero || g.classics?.length ? 'dialeg' : 'sessio')) === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
@@ -1655,7 +1656,8 @@ function openGravacio(g, dataPerDefecte) {
         <div><h4>${nom}</h4>${[0, 1, 2, 3, 4].map((i) => `<div class="art-fila" data-i="${i}">
           <input name="${pre}_art_${i}" value="${esc(llista?.[i]?.artista || '')}" placeholder="Artista" autocomplete="off">
           <input name="${pre}_disc_${i}" value="${esc(llista?.[i]?.disc || '')}" placeholder="Disc" class="nomes-dialeg" autocomplete="off">
-          <input name="${pre}_canco_${i}" value="${esc(llista?.[i]?.canco || '')}" placeholder="Cançó" class="nomes-canco" autocomplete="off"></div>`).join('')}</div>`).join('')}
+          <input name="${pre}_canco_${i}" value="${esc(llista?.[i]?.canco || '')}" placeholder="Cançó (escriu i tria)" class="nomes-canco" autocomplete="off">
+          <input type="hidden" name="${pre}_url_${i}" value="${esc(llista?.[i]?.url || '')}"></div>`).join('')}</div>`).join('')}
       </div>
       <button type="button" class="btn small nomes-pindola" data-dlg="omple-pindola">↺ Omple els clàssics amb els dels 4 diàlegs anteriors</button>
       <span class="hint" id="previaTitol"></span>
@@ -1741,7 +1743,8 @@ function openGravacio(g, dataPerDefecte) {
       // Entrevista: qui és el convidat i les seves 4 cançons (amb les 4 posades, es marca sola la casella «Cançons»)
       if (!musical) {
         dades.descripcio = String(f.get('descripcio') || '').trim();
-        dades.cancons = [0, 1, 2, 3].map((i) => ({ artista: String(f.get(`cv_art_${i}`) || '').trim(), canco: String(f.get(`cv_canco_${i}`) || '').trim() }))
+        dades.cancons = [0, 1, 2, 3].map((i) => ({ artista: String(f.get(`cv_art_${i}`) || '').trim(), canco: String(f.get(`cv_canco_${i}`) || '').trim(),
+          ...(f.get(`cv_url_${i}`) ? { url: String(f.get(`cv_url_${i}`)) } : {}) }))
           .filter((c) => c.artista || c.canco);
         if (dades.cancons.filter((c) => c.artista && c.canco).length === 4 && !fet(g, 'cancons')) dades.pla = { ...(g.pla || {}), cancons: true };
       }
@@ -1831,7 +1834,55 @@ function openGravacio(g, dataPerDefecte) {
   f.onchange = comprova;
   comprova();
   if (esDavid()) bloquejaDavid(f, g, nou);
+  activaCercaMusica(f);
   if (!mobil.matches && nou) f.elements.titol.focus();
+}
+
+/* ---------- Cerca de cançons al catàleg d'Apple Music ----------
+   Escrivint a la casella «Cançó» (i, si vols, l'artista al costat) surten les cançons del catàleg d'Apple;
+   en triar-ne una s'omplen l'artista i el títol ben escrits i es guarda l'enllaç per escoltar-la.
+   Fa servir el cercador públic d'Apple (el mateix catàleg que Apple Music): no cal iniciar sessió. */
+const netejaTitol = (t) => String(t || '').replace(/\s*[([][^)\]]*remaster[^)\]]*[)\]]/ig, '').replace(/\s+-\s+.*remaster.*$/i, '').trim();
+function activaCercaMusica(f) {
+  f.querySelectorAll('input[name*="_canco_"]').forEach((inp) => {
+    const [pre, , i] = inp.name.split('_');
+    const art = f.elements[`${pre}_art_${i}`], url = f.elements[`${pre}_url_${i}`], fila = inp.parentElement;
+    if (!art || !url || inp.readOnly) return;
+    fila.classList.add('amb-cerca');
+    const llista = Object.assign(document.createElement('div'), { className: 'cerca-musica', hidden: true });
+    const escolta = Object.assign(document.createElement('a'), { className: 'cv-escolta', target: '_blank', rel: 'noopener', textContent: '▶ Escolta', title: 'Obre la cançó a Apple Music' });
+    fila.append(llista, escolta);
+    const mostraEscolta = () => { escolta.hidden = !url.value; if (url.value) escolta.href = url.value; };
+    mostraEscolta();
+    let temps = null, darrera = 0;
+    const cerca = async () => {
+      const q = `${art.value} ${inp.value}`.trim();
+      if (inp.value.trim().length < 2) { llista.hidden = true; return; }
+      const n = ++darrera;
+      llista.innerHTML = '<span class="hint">Cercant…</span>'; llista.hidden = false;
+      try {
+        const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&country=es&limit=8`).then((x) => x.json());
+        if (n !== darrera) return;
+        const vist = new Set();
+        const res = (r.results || []).filter((x) => { const k = clauCerca(netejaTitol(x.trackName) + x.artistName); if (vist.has(k)) return false; vist.add(k); return true; });
+        llista.innerHTML = res.length ? res.map((x, j) => `<button type="button" data-j="${j}">
+            ${x.artworkUrl60 ? `<img src="${esc(x.artworkUrl60)}" alt="" loading="lazy">` : ''}
+            <span><b>${esc(netejaTitol(x.trackName))}</b><span>${esc(x.artistName)}${x.collectionName ? ' · ' + esc(x.collectionName) : ''}${x.releaseDate ? ' · ' + x.releaseDate.slice(0, 4) : ''}</span></span></button>`).join('')
+          : '<span class="hint">No he trobat cap cançó. Prova amb l\'artista al costat.</span>';
+        llista.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const x = res[Number(b.dataset.j)];
+          art.value = x.artistName; inp.value = netejaTitol(x.trackName); url.value = x.trackViewUrl || '';
+          llista.hidden = true; mostraEscolta();
+          f.dispatchEvent(new Event('input'));
+        }));
+      } catch (e) { if (n === darrera) llista.innerHTML = '<span class="hint">No s\'ha pogut cercar. Comprova la connexió.</span>'; }
+    };
+    inp.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 400); });
+    inp.addEventListener('focus', () => { if (inp.value.trim().length >= 2 && !url.value) cerca(); });
+    inp.addEventListener('blur', () => setTimeout(() => { llista.hidden = true; }, 150));
+    art.addEventListener('input', () => { url.value = ''; mostraEscolta(); });
+  });
 }
 // Perfil d'en David: bloqueja el que no pot canviar i ho explica a dalt del formulari
 function bloquejaDavid(f, g, nou) {
@@ -1861,7 +1912,8 @@ function llegeixMusica(f) {
     const a = { artista: camp(`${pre}_art_${i}`) };
     const disc = tipusEp === 'dialeg' ? camp(`${pre}_disc_${i}`) : '', canco = tipusEp === 'pindola' || tipusEp === 'tematic' ? camp(`${pre}_canco_${i}`) : '';
     if (disc) a.disc = disc;
-    if (canco) a.canco = canco;                                   // píndola resum: la cançó de cada artista
+    if (canco) a.canco = canco;                                   // píndola resum i temàtic: la cançó de cada artista
+    if (canco && camp(`${pre}_url_${i}`)) a.url = camp(`${pre}_url_${i}`);   // enllaç a Apple Music
     return a;
   }).filter((a) => a.artista);
   return { tipusEp, tema: tipusEp === 'tematic' ? String(f.get('tema') || '').trim() : '', classics: llista('c'), contemporanis: llista('k') };
