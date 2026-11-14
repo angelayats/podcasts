@@ -1568,6 +1568,7 @@ function renderConfig(m) {
     })()}
     <div class="section">
       <h2>Instal·lar l'app</h2>
+      <p class="hint" id="versioApp"></p>
       <p class="help"><b>iPhone:</b> obre-la amb Safari, toca <b>Compartir</b> i després <b>Afegeix a la pantalla d'inici</b>.<br>
       <b>Ordinador:</b> a Chrome o Edge, fes clic a la icona d'instal·lar de la barra d'adreces.</p>
     </div>
@@ -1579,6 +1580,7 @@ function renderConfig(m) {
       </div>
     </div>`;
   if (typeof Sync !== 'undefined') Sync.bind();
+  window.caches?.keys().then((k) => { const v = k.find((x) => /^podcasts-v\d+/.test(x)); if (v && $('#versioApp')) $('#versioApp').textContent = "Versió de l'app: " + v.replace('podcasts-', ''); }).catch(() => {});
   $('#formEstudi').addEventListener('submit', (e) => {
     e.preventDefault();
     const v = new FormData(e.target).get('estudi').trim();
@@ -1859,7 +1861,7 @@ function activaCercaMusica(f) {
     let temps = null, darrera = 0;
     const cerca = async () => {
       const q = `${art.value} ${inp.value}`.trim();
-      if (inp.value.trim().length < 2) { llista.hidden = true; return; }
+      if (q.length < 2) { llista.hidden = true; return; }
       const n = ++darrera;
       llista.innerHTML = '<span class="hint">Cercant…</span>'; llista.hidden = false;
       try {
@@ -1871,19 +1873,23 @@ function activaCercaMusica(f) {
             ${x.artworkUrl60 ? `<img src="${esc(x.artworkUrl60)}" alt="" loading="lazy">` : ''}
             <span><b>${esc(netejaTitol(x.trackName))}</b><span>${esc(x.artistName)}${x.collectionName ? ' · ' + esc(x.collectionName) : ''}${x.releaseDate ? ' · ' + x.releaseDate.slice(0, 4) : ''}</span></span></button>`).join('')
           : '<span class="hint">No he trobat cap cançó. Prova amb l\'artista al costat.</span>';
-        llista.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (e) => {
+        // Al iPhone el toc arriba com a «pointerdown» i després «click»: qualsevol dels dos tria la cançó
+        const tria = (b, e) => {
           e.preventDefault();
           const x = res[Number(b.dataset.j)];
           art.value = x.artistName; inp.value = netejaTitol(x.trackName); url.value = x.trackViewUrl || '';
           llista.hidden = true; mostraEscolta();
           f.dispatchEvent(new Event('input'));
-        }));
+        };
+        llista.querySelectorAll('button').forEach((b) => { b.addEventListener('pointerdown', (e) => tria(b, e)); b.addEventListener('click', (e) => tria(b, e)); });
       } catch (e) { if (n === darrera) llista.innerHTML = '<span class="hint">No s\'ha pogut cercar. Comprova la connexió.</span>'; }
     };
     inp.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 400); });
     inp.addEventListener('focus', () => { if (inp.value.trim().length >= 2 && !url.value) cerca(); });
-    inp.addEventListener('blur', () => setTimeout(() => { llista.hidden = true; }, 150));
-    art.addEventListener('input', () => { url.value = ''; mostraEscolta(); });
+    inp.addEventListener('blur', () => setTimeout(() => { llista.hidden = true; }, 400));
+    // També es pot cercar escrivint l'artista: surten les seves cançons
+    art.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 500); });
+    art.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== inp) llista.hidden = true; }, 400));
   });
 }
 // Perfil d'en David: bloqueja el que no pot canviar i ho explica a dalt del formulari
