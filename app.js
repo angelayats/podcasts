@@ -409,8 +409,10 @@ const TIPUS_PLA = { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic' 
 const episodisPla = (pid) => state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && TIPUS_PLA[g.tipusEp]).sort((a, b) => a.numero - b.numero);
 const fet = (g, k) => Boolean(g.pla?.[k]);
 const artDisc = (a) => (a?.artista ? `<b>${esc(a.artista)}</b>${a.disc ? ' · ' + esc(a.disc) : ''}` : '');
+const artCanco = (ll) => (ll || []).filter((a) => a.artista).map((a) => `${esc(a.artista)}${a.canco ? ` <i>«${esc(a.canco)}»</i>` : ''}`).join(', ');
+const textCanco = (ll) => (ll || []).filter((a) => a.artista).map((a) => `${a.artista}${a.canco ? ` «${a.canco}»` : ''}`);
 function columnesPla(g) {
-  if (g.tipusEp === 'pindola') return [`<b><i>${esc(g.titol || 'Píndola resum')}</i></b>`, esc((g.classics || []).map((a) => a.artista).filter(Boolean).join(', '))];
+  if (g.tipusEp === 'pindola') return [`<b><i>${esc(g.titol || 'Píndola resum')}</i></b> · ${artCanco(g.classics)}`, artCanco(g.contemporanis)];
   if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}`, ''];
   return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
 }
@@ -539,7 +541,7 @@ function renderPlanificacio(m) {
           .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button class="btn nomes-angel" data-action="renumera">↻ Renumera</button>
         <button class="btn primary nomes-david" data-action="proposta">+ Proposta</button>
-        <button class="btn" data-action="exporta-pla">⬇ Excel</button>
+        <button class="btn" data-action="exporta-pla">⬇ Exporta</button>
       </div>
     </div>
     <div class="pla-tauler">${tauler.map(([k, nom, g]) => `<button class="pla-t pla-t-${k}" ${g ? `data-action="ves-pla" data-id="${g.id}"` : ''}>
@@ -617,7 +619,8 @@ function calculaRenumeracio(pid) {
   const posaPindola = () => {
     nP++;
     const p = velles.shift() || (nous.push(nouEpPla(pid, 'pindola')), nous[nous.length - 1]);
-    ordre.push([p, { titol: `Píndola resum ${nP}`, classics: grup.map((d) => ({ artista: d.classics?.[0]?.artista || '', disc: '' })) }]);
+    const canco = (a) => (p.classics || []).find((x) => x.artista && x.artista === a)?.canco;
+    ordre.push([p, { titol: `Píndola resum ${nP}`, classics: grup.map((d) => { const a = d.classics?.[0]?.artista || ''; return { artista: a, disc: '', ...(canco(a) ? { canco: canco(a) } : {}) }; }) }]);
     grup = []; pinds++;
     if (pinds === 2) { pinds = 0; ordre.push([tematics.shift() || (nous.push(nouEpPla(pid, 'tematic')), nous[nous.length - 1]), {}]); }
   };
@@ -659,9 +662,8 @@ const carregaExceljs = () => exceljsCarregat || (exceljsCarregat = new Promise((
   const sc = Object.assign(document.createElement('script'), { src: EXCELJS, onload: () => ok(window.ExcelJS), onerror: () => { exceljsCarregat = null; ko(); } });
   document.head.append(sc);
 }));
-async function exportaPla() {
+async function exportaPla(eps) {
   const p = prog(ui.planProg);
-  const eps = p ? episodisPla(p.id) : [];
   if (!eps.length) return toast('No hi ha episodis per exportar.');
   toast("Preparant l'Excel…");
   let ExcelJS;
@@ -725,7 +727,7 @@ async function exportaPla() {
     const data = g.emissio ? new Date(Date.UTC(...g.emissio.split('-').map((x, j) => Number(x) - (j === 1 ? 1 : 0)))) : null;
     const [c0, n0] = [g.classics?.[0] || {}, g.contemporanis?.[0] || {}];
     const vals = t === 'dialeg' ? [c0.artista || '', c0.disc || '', n0.artista || '', n0.disc || '']
-      : t === 'pindola' ? [g.titol || 'Píndola resum', (g.classics || []).map((a) => a.artista).filter(Boolean).join(', '), '', '']
+      : t === 'pindola' ? [g.titol || 'Píndola resum', textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), '']
         : ['Temàtic', g.tema || '', '', ''];
     r.values = [g.numero, TIPUS_PLA[t], data, ...vals, ...PLA_ESTATS.map(([k]) => (fet(g, k) ? SI : NO)), g.notes || ''];
     r.eachCell({ includeEmpty: true }, (cel, c) => {
@@ -768,6 +770,171 @@ async function exportaPla() {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast('Excel descarregat.');
+}
+
+// Quins episodis entren a l'Excel, al PDF o a la impressió (com el filtre de la Planificació)
+const FILTRES_PLA = [['tots', 'Tots els episodis'], ['pendents', "Pendents d'emetre"], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar']];
+const filtraPla = (eps, f) => eps.filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes'))
+  || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')) || (f === 'david' && g.david));
+function triaExportacio() {
+  const actual = FILTRES_PLA.some(([v]) => v === ui.filtrePla) ? ui.filtrePla : 'tots';
+  openDialog(`<h3>Exporta la planificació</h3>
+    <label>Què hi entra <select name="quins">${FILTRES_PLA.map(([v, t]) => `<option value="${v}" ${v === actual ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <div class="exporta-opcions">
+      <button type="button" class="btn" data-dlg="pdf"><b>📄 PDF</b><span>Per enviar per WhatsApp o per correu</span></button>
+      <button type="button" class="btn" data-dlg="imprimeix"><b>🖨 Imprimeix</b><span>Directament a la impressora</span></button>
+      <button type="button" class="btn" data-dlg="excel"><b>📊 Excel</b><span>Per treballar-hi a l'ordinador</span></button>
+    </div>`, {
+    onSave: () => false,
+    onExtra(a) {
+      const eps = filtraPla(episodisPla(ui.planProg), $('#dlgForm').elements.quins.value);
+      if (!eps.length) return toast('No hi ha cap episodi amb aquesta tria.');
+      closeDialog();
+      if (a === 'excel') exportaPla(eps);
+      if (a === 'pdf') pdfPla(eps);
+      if (a === 'imprimeix') imprimeixPla(eps);
+    },
+  });
+  $('#dlgForm button[type="submit"]').hidden = true;
+}
+
+// Model comú del PDF i de la impressió: text de cada columna
+const dataNum = (ds) => (ds ? ds.split('-').reverse().map(Number).join('/') : '');
+function filaPla(g) {
+  const t = g.tipusEp, c0 = g.classics?.[0] || {}, k0 = g.contemporanis?.[0] || {};
+  const [a, b] = t === 'dialeg' ? [[c0.artista || 'Clàssic per decidir', c0.disc], [k0.artista || 'Alternatiu per decidir', k0.disc]]
+    : t === 'pindola' ? [[g.titol || 'Píndola resum', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]]
+      : [['Temàtic', g.tema || 'Tema per decidir'], ['']];
+  return { g, t, a: a.filter(Boolean), b: b.filter(Boolean) };
+}
+const taulerPla = (eps) => {
+  const nomEp = (g) => (g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? `Temàtic ${g.tema || ''}`.trim() : g.titol);
+  return [["Enviar a l'emissora", 'emes', '#FF7A1F', true], ['Proper a gravar', 'gravat', '#1F66C9'], ['Proper guió', 'guio', '#6E4FC0']].map(([nom, k, col, ambData]) => {
+    const g = eps.find((x) => !fet(x, k));
+    return { nom, col, g, text: g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + dataNum(g.emissio) : ''} · ${nomEp(g)}` : 'Tot fet' };
+  });
+};
+const nomFitxerPla = (ext) => `Blanc-i-Negre-Planificacio-${ymd(new Date())}.${ext}`;
+const COL_TIPUS = { dialeg: '#BFD7F5', pindola: '#FFDB70', tematic: '#D2B6F0' };
+const COL_FET = { validat: '#FFC94D', canvi: '#FFC94D', guio: '#B99DE6', gravat: '#7FB0EE', emes: '#9FDB95' };
+
+// Desa o comparteix un fitxer (al mòbil, el full de compartir: WhatsApp, Mail, Fitxers…)
+async function lliuraFitxer(blob, nom) {
+  const fitxer = new File([blob], nom, { type: blob.type });
+  if (mobil.matches && navigator.canShare?.({ files: [fitxer] })) {
+    try { await navigator.share({ files: [fitxer] }); } catch (e) { /* cancel·lat */ }
+    return;
+  }
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nom });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('PDF descarregat: ja el pots adjuntar al WhatsApp o al correu.');
+}
+
+/* PDF de la planificació (A4 apaïsat): logo, tauler, llegenda i taula amb els colors de l'app */
+const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+const carregaScript = (src) => new Promise((ok, ko) => document.head.append(Object.assign(document.createElement('script'), { src, onload: ok, onerror: ko })));
+let jspdfCarregat = null;
+const carregaJspdf = () => jspdfCarregat || (jspdfCarregat = carregaScript(JSPDF).then(() => carregaScript(AUTOTABLE)).then(() => window.jspdf.jsPDF)
+  .catch((e) => { jspdfCarregat = null; throw e; }));
+// El logo es passa a JPEG més petit perquè el PDF pesi poc (per WhatsApp)
+const imatgeDataUrl = (src) => new Promise((ok, ko) => {
+  const img = new Image();
+  img.onload = () => {
+    const cv = Object.assign(document.createElement('canvas'), { width: 1600, height: Math.round(1600 * img.height / img.width) });
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    ok(cv.toDataURL('image/jpeg', 0.85));
+  };
+  img.onerror = ko;
+  img.src = src;
+});
+async function pdfPla(eps) {
+  toast('Preparant el PDF…');
+  let JsPDF;
+  try { JsPDF = await carregaJspdf(); } catch (e) { return toast("No s'ha pogut preparar el PDF. Comprova la connexió."); }
+  const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+  const W = 297, M = 10, ample = W - 2 * M;
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  let y = M;
+  try { doc.addImage(await imatgeDataUrl('img/capcalera-blanc-i-negre.png'), 'JPEG', M, y, ample, ample * 340 / 2800); y += ample * 340 / 2800 + 4; }
+  catch (e) { doc.setFontSize(18); doc.text(prog(ui.planProg)?.nom || 'Blanc & Negre', M, y + 6); y += 10; }
+  doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100);
+  doc.text(`Planificació · ${eps.length} episodis · ${dataNum(ymd(new Date()))} · Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic`, M, y);
+  y += 3;
+  // Tauler (sempre sobre tots els episodis)
+  const bw = (ample - 8) / 3;
+  taulerPla(episodisPla(ui.planProg)).forEach((x, i) => {
+    const bx = M + i * (bw + 4);
+    doc.setFillColor(...rgb(x.col)); doc.roundedRect(bx, y, bw, 12, 2, 2, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.text(x.nom.toUpperCase(), bx + 3, y + 4.5);
+    doc.setFontSize(9.5); doc.text(doc.splitTextToSize(x.text, bw - 6)[0], bx + 3, y + 9.5);
+  });
+  y += 16;
+  const env = episodisPla(ui.planProg).find((g) => !fet(g, 'emes')), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
+  const files = eps.map(filaPla);
+  doc.autoTable({
+    startY: y, margin: { left: M, right: M, bottom: 12 }, theme: 'grid',
+    head: [['Núm.', 'Tipus', 'Emissió', 'Clàssic / Títol', 'Alternatiu', ...PLA_ESTATS.map(([, n]) => n), 'Notes']],
+    body: files.map((f) => Object.assign([f.g.numero, TIPUS_PLA[f.t], dataNum(f.g.emissio), f.a.join('\n'), f.b.join('\n'), '', '', '', '', '', f.g.notes || ''], { f })),
+    rowPageBreak: 'avoid',
+    styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.4, lineColor: [205, 205, 205], lineWidth: 0.2, textColor: [14, 14, 14], valign: 'middle', overflow: 'linebreak' },
+    headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
+    columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 62 },
+      5: { cellWidth: 13 }, 6: { cellWidth: 13 }, 7: { cellWidth: 13 }, 8: { cellWidth: 13 }, 9: { cellWidth: 13 }, 10: { cellWidth: 'auto', fontSize: 7, textColor: [80, 80, 80] } },
+    didParseCell(d) {
+      if (d.section !== 'body') return;
+      const f = d.row.raw.f, k = PLA_ESTATS[d.column.index - 5]?.[0];
+      d.cell.styles.fillColor = rgb(COL_TIPUS[f.t]);
+      if ((d.column.index === 3 || d.column.index === 4) && f.t !== 'dialeg') d.cell.styles.fontStyle = 'italic';
+      if (k) d.cell.styles.fillColor = rgb(fet(f.g, k) ? COL_FET[k] : ['guio', 'gravat', 'emes'].includes(k) ? '#F4AFAF' : COL_TIPUS[f.t]);
+      if (d.column.index === 0 && (f.g === env || f.g === grav)) { d.cell.styles.fillColor = rgb(f.g === env ? '#FF7A1F' : '#1F66C9'); d.cell.styles.textColor = 255; }
+    },
+    didDrawCell(d) {
+      const k = PLA_ESTATS[d.column.index - 5]?.[0];
+      if (d.section !== 'body' || !k || !d.row.raw?.f || !fet(d.row.raw.f.g, k)) return;
+      const cx = d.cell.x + d.cell.width / 2, cy = d.cell.y + d.cell.height / 2;     // ✓ dibuixat
+      doc.setDrawColor(14); doc.setLineWidth(0.6);
+      doc.line(cx - 1.8, cy, cx - 0.5, cy + 1.4); doc.line(cx - 0.5, cy + 1.4, cx + 2, cy - 1.6);
+    },
+    didDrawPage(d) {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120);
+      doc.text(`Blanc & Negre · Planificació · pàgina ${d.pageNumber}`, W - M, 205, { align: 'right' });
+    },
+  });
+  // Llegenda al final
+  let ly = Math.min(doc.lastAutoTable.finalY + 5, 200);
+  [['Diàleg', COL_TIPUS.dialeg], ['Píndola', COL_TIPUS.pindola], ['Temàtic', COL_TIPUS.tematic], ['Per enviar', '#FF7A1F'], ['Per gravar', '#1F66C9'], ['Pendent', '#F4AFAF']].forEach(([t, c], i) => {
+    const lx = M + i * 30;
+    doc.setFillColor(...rgb(c)); doc.rect(lx, ly - 3, 4, 4, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(60); doc.text(t, lx + 5.5, ly);
+  });
+  await lliuraFitxer(doc.output('blob'), nomFitxerPla('pdf'));
+}
+
+/* Impressió: la mateixa taula, en paper (A4 apaïsat) */
+function imprimeixPla(eps) {
+  let z = $('#zonaImpressio');
+  if (!z) { z = Object.assign(document.createElement('div'), { id: 'zonaImpressio' }); document.body.append(z); }
+  const env = episodisPla(ui.planProg).find((g) => !fet(g, 'emes')), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
+  const linies = (ll, primeraNegreta) => ll.map((x, i) => (i === 0 && primeraNegreta ? `<b>${esc(x)}</b>` : esc(x))).join('<br>');
+  z.className = 'pla';
+  z.innerHTML = `<img class="zp-logo" src="img/capcalera-blanc-i-negre.png" alt="Blanc & Negre">
+    <p class="zp-sub">Planificació · ${eps.length} episodis · imprès el ${dataNum(ymd(new Date()))} · Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic</p>
+    <div class="zp-tauler">${taulerPla(episodisPla(ui.planProg)).map((x) => `<div style="background:${x.col}"><span>${esc(x.nom)}</span><b>${esc(x.text)}</b></div>`).join('')}</div>
+    <table><thead><tr><th>Núm.</th><th>Tipus</th><th>Emissió</th><th>Clàssic / Títol</th><th>Alternatiu</th>${PLA_ESTATS.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
+    <tbody>${eps.map(filaPla).map((f) => `<tr style="background:${COL_TIPUS[f.t]}">
+      <td class="c num" ${f.g === env || f.g === grav ? `style="background:${f.g === env ? '#FF7A1F' : '#1F66C9'};color:#fff"` : ''}>${f.g.numero}</td>
+      <td>${TIPUS_PLA[f.t]}</td><td class="c">${dataNum(f.g.emissio)}</td>
+      <td class="${f.t === 'dialeg' ? '' : 'it'}">${linies(f.a, true)}</td><td>${linies(f.b, f.t === 'dialeg')}</td>
+      ${PLA_ESTATS.map(([k]) => `<td class="c" style="background:${fet(f.g, k) ? COL_FET[k] : ['guio', 'gravat', 'emes'].includes(k) ? '#F4AFAF' : 'transparent'}">${fet(f.g, k) ? '✓' : ''}</td>`).join('')}
+      <td class="zp-notes">${esc(f.g.notes || '')}</td></tr>`).join('')}</tbody></table>`;
+  const titolAbans = document.title;
+  document.title = nomFitxerPla('pdf').replace('.pdf', '');
+  window.addEventListener('afterprint', () => { document.title = titolAbans; z.className = ''; }, { once: true });
+  const img = z.querySelector('img');
+  const imprimeixAra = () => setTimeout(() => window.print(), 50);
+  if (img.complete) imprimeixAra(); else { img.onload = imprimeixAra; img.onerror = imprimeixAra; }
 }
 
 /* ---------- Estadístiques ---------- */
@@ -1386,7 +1553,8 @@ function openGravacio(g, dataPerDefecte) {
       <div class="musica-cols">${[['c', 'Clàssics', g.classics], ['k', 'Contemporanis / alternatius', g.contemporanis]].map(([pre, nom, llista]) => `
         <div><h4>${nom}</h4>${[0, 1, 2, 3, 4].map((i) => `<div class="art-fila" data-i="${i}">
           <input name="${pre}_art_${i}" value="${esc(llista?.[i]?.artista || '')}" placeholder="Artista" autocomplete="off">
-          <input name="${pre}_disc_${i}" value="${esc(llista?.[i]?.disc || '')}" placeholder="Disc" class="nomes-dialeg" autocomplete="off"></div>`).join('')}</div>`).join('')}
+          <input name="${pre}_disc_${i}" value="${esc(llista?.[i]?.disc || '')}" placeholder="Disc" class="nomes-dialeg" autocomplete="off">
+          <input name="${pre}_canco_${i}" value="${esc(llista?.[i]?.canco || '')}" placeholder="Cançó" class="nomes-pindola" autocomplete="off"></div>`).join('')}</div>`).join('')}
       </div>
       <button type="button" class="btn small nomes-pindola" data-dlg="omple-pindola">↺ Omple els clàssics amb els dels 4 diàlegs anteriors</button>
       <span class="hint" id="previaTitol"></span>
@@ -1574,8 +1742,14 @@ function bloquejaDavid(f, g, nou) {
 /* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
 function llegeixMusica(f) {
   const tipusEp = f.get('tipusEp') || 'dialeg', n = TIPUS_EP[tipusEp][1];
-  const llista = (pre) => [0, 1, 2, 3, 4].slice(0, n).map((i) => ({ artista: String(f.get(`${pre}_art_${i}`) || '').trim(), disc: tipusEp === 'dialeg' ? String(f.get(`${pre}_disc_${i}`) || '').trim() : '' }))
-    .filter((a) => a.artista).map((a) => (a.disc ? a : { artista: a.artista }));
+  const camp = (nom) => String(f.get(nom) || '').trim();
+  const llista = (pre) => [0, 1, 2, 3, 4].slice(0, n).map((i) => {
+    const a = { artista: camp(`${pre}_art_${i}`) };
+    const disc = tipusEp === 'dialeg' ? camp(`${pre}_disc_${i}`) : '', canco = tipusEp === 'pindola' ? camp(`${pre}_canco_${i}`) : '';
+    if (disc) a.disc = disc;
+    if (canco) a.canco = canco;                                   // píndola resum: la cançó de cada artista
+    return a;
+  }).filter((a) => a.artista);
   return { tipusEp, tema: tipusEp === 'tematic' ? String(f.get('tema') || '').trim() : '', classics: llista('c'), contemporanis: llista('k') };
 }
 const titolDialeg = (m) => [m.classics[0]?.artista, m.contemporanis[0]?.artista].filter(Boolean).join(' - ');
@@ -1726,7 +1900,7 @@ $('#main').addEventListener('click', (e) => {
     case 'vista': ui.view = el.dataset.v; render(); window.scrollTo(0, 0); return;
     case 'ves-pla': return vesPla(id);
     case 'renumera': return renumera();
-    case 'exporta-pla': return exportaPla();
+    case 'exporta-pla': return triaExportacio();
     case 'proposta': return openProposta(state.propostes.find((x) => x.id === id) || null);
     case 'accepta-proposta': return acceptaProposta(id);
     case 'descarta-proposta': return descartaProposta(id);
@@ -2049,6 +2223,7 @@ function obreVisorPdf(url, titol) {
 function imprimeix(titol, seccions) {
   let z = $('#zonaImpressio');
   if (!z) { z = Object.assign(document.createElement('div'), { id: 'zonaImpressio' }); document.body.append(z); }
+  z.className = '';
   const avui = new Date();
   z.innerHTML = `<header><h1>${esc(titol)}</h1><p>${esc(APP.nom)} · imprès el ${avui.getDate()}/${avui.getMonth() + 1}/${avui.getFullYear()}</p></header>`
     + seccions.filter((x) => x.files.length).map((x) => `${seccions.length > 1 || x.nom ? `<h2>${esc(x.nom)} (${x.files.length})</h2>` : ''}

@@ -682,3 +682,24 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .nota-david { margin: -4px 0 12px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--pla-david) 12%, var(--surface)); font-size: 13px; }
 #dlgForm select.bloquejat { pointer-events: none; opacity: .6; }
 #dlgForm input[readonly] { opacity: .6; }
+
+/* ---------- Exporta la planificació: PDF, imprimir o Excel ---------- */
+.exporta-opcions { display: grid; gap: 8px; margin-top: 12px; }
+.exporta-opcions .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; height: auto; }
+.exporta-opcions .btn span { font-size: 13px; color: var(--muted); font-weight: 400; }
+@page pla { size: A4 landscape; margin: 8mm; }
+@media print {
+  #zonaImpressio.pla { page: pla; font-size: 8pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #zonaImpressio.pla .zp-logo { display: block; width: 100%; height: auto; }
+  #zonaImpressio.pla .zp-sub { margin: 4px 0 6px; font-size: 7.5pt; font-style: italic; color: #555; }
+  #zonaImpressio.pla .zp-tauler { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-bottom: 4mm; }
+  #zonaImpressio.pla .zp-tauler div { color: #fff; border-radius: 2mm; padding: 1.5mm 3mm; display: flex; flex-direction: column; }
+  #zonaImpressio.pla .zp-tauler span { font-size: 6.5pt; text-transform: uppercase; letter-spacing: .5px; }
+  #zonaImpressio.pla .zp-tauler b { font-size: 9pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #zonaImpressio.pla th { background: #111; color: #fff; font-size: 7pt; padding: 3px 4px; border: .5px solid #ccc; text-align: center; }
+  #zonaImpressio.pla td { border: .5px solid #ccc; padding: 2.5px 4px; vertical-align: middle; }
+  #zonaImpressio.pla td.c { width: 11mm; text-align: center; font-weight: 700; }
+  #zonaImpressio.pla td.num { width: 9mm; }
+  #zonaImpressio.pla td.it { font-style: italic; }
+  #zonaImpressio.pla .zp-notes { font-size: 7pt; color: #444; }
+}
