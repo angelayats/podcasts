@@ -706,3 +706,20 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
   #zonaImpressio.pla td.it { font-style: italic; }
   #zonaImpressio.pla .zp-notes { font-size: 7pt; color: #444; }
 }
+
+/* ---------- Planificació de les entrevistes (La cara oculta de la lluna) ---------- */
+:root { --pla-entrevista: #D6DCEC; --pc-confirmat: #FFC94D; --pc-cancons: #9FD9C9; --pc-editat: #7FD0D6; --pc-noticia: #D9D46E; }
+.t-entrevista { --pc: var(--pla-entrevista); }
+.pla-desc { color: var(--muted); font-size: 13px; }
+.pcel.si.pc-confirmat { background: var(--pc-confirmat); } .pcel.si.pc-cancons { background: var(--pc-cancons); }
+.pcel.si.pc-editat { background: var(--pc-editat); } .pcel.si.pc-noticia { background: var(--pc-noticia); }
+.pcel.no.pc-confirmat, .pcel.no.pc-cancons, .pcel.no.pc-editat { background: color-mix(in srgb, var(--pc-pendent) 70%, transparent); }
+.pc-confirmat:has(input:checked) { background: var(--pc-confirmat); color: #0E0E0E; }
+.pc-cancons:has(input:checked) { background: var(--pc-cancons); color: #0E0E0E; }
+.pc-editat:has(input:checked) { background: var(--pc-editat); color: #0E0E0E; }
+.pc-noticia:has(input:checked) { background: var(--pc-noticia); color: #0E0E0E; }
+.cancons-conv .cv-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+@media (max-width: 760px) { .pla-card.pla-7 .pla-checks { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media print {
+  #zonaImpressio.pla .zp-titol { color: #fff; font-size: 18pt; font-weight: 700; padding: 3mm 4mm; border-radius: 2mm; }
+}

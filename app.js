@@ -160,7 +160,7 @@ const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
 const emissioText = (g) => (g.emissio ? `Emissió Girona FM: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
 const GRAVADA = ['gravat', 'editat', 'publicat'];
 // Gravat / emès: ho diu l'estat de la gravació o les caselles de la Planificació (n'hi ha prou amb un dels dos)
-const esGravat = (g) => GRAVADA.includes(g.estat) || Boolean(g.pla?.gravat || g.pla?.emes);
+const esGravat = (g) => GRAVADA.includes(g.estat) || Boolean(g.pla?.gravat || g.pla?.editat || g.pla?.emes);
 const esPublicat = (g) => g.estat === 'publicat' || Boolean(g.pla?.emes);
 const jaGravada = (g, avui = ymd(new Date())) => esGravat(g) || Boolean(g.data && g.data <= avui);
 const equip = (g) => [...(g.presentadors || []).map(pers), pers(g.tecnic)].filter(Boolean).map((p) => p.nom);
@@ -397,29 +397,51 @@ function renderProgrames(m) {
           <div class="sub">${properes.length ? `Propera: ${dataCurta(properes[0].data)}, ${properes[0].hora}` : 'Cap gravació programada'}</div>
           <div class="acts"><button class="btn small nomes-angel" data-action="edita-programa" data-id="${p.id}">Edita</button>
             <button class="btn small" data-action="filtra-programa" data-id="${p.id}">Calendari</button>
-            ${esMusical(p.id) ? `<button class="btn small" data-action="planificacio" data-id="${p.id}">Planificació${avisPrograma(p.id)}</button>` : ''}</div>
+            <button class="btn small" data-action="planificacio" data-id="${p.id}">Planificació${esMusical(p.id) ? avisPrograma(p.id) : ''}</button></div>
         </div>
       </div>`;
     }).join('') || '<p class="empty">Encara no hi ha programes. Crea el primer!</p>'}</div>
     ${estadistiques()}`;
 }
 
-/* ---------- Planificació (programes musicals: Blanc & Negre) ---------- */
-// Ordre d'emissió de tots els episodis numerats: diàlegs, píndoles resum i temàtics.
-// Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Emissió cada dissabte; juliol i agost, vacances.
+/* ---------- Planificació ----------
+   Blanc & Negre (musical): diàlegs, píndoles resum i temàtics. Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Cada dissabte.
+   La cara oculta de la lluna (entrevista): un convidat per programa, amb 4 cançons. Cada dijous.
+   Tots dos: juliol i agost, vacances. */
 const PLA_ESTATS = [['validat', 'Validat'], ['canvi', 'Canvi'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['emes', 'Emès']];
-const TIPUS_PLA = { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic' };
-const episodisPla = (pid) => state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && TIPUS_PLA[g.tipusEp]).sort((a, b) => a.numero - b.numero);
+const ESTATS_ENTREVISTA = [['confirmat', 'Confirmat'], ['cancons', 'Cançons'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['editat', 'Editat'], ['emes', 'Emès'], ['noticia', 'Notícia']];
+const TIPUS_PLA = { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic', entrevista: 'Entrevista' };
+const estatsPla = (pid = ui.planProg) => (esMusical(pid) ? PLA_ESTATS : ESTATS_ENTREVISTA);
+const tipusPla = (g) => (esMusical(g.programaId) ? g.tipusEp : 'entrevista');
+// Caselles que surten en vermell clar mentre no estan fetes
+const rosaPla = (k, pid = ui.planProg) => (esMusical(pid) ? ['guio', 'gravat', 'emes'] : ['confirmat', 'cancons', 'guio', 'gravat', 'editat', 'emes']).includes(k);
+const capPla = (pid = ui.planProg) => (esMusical(pid) ? ['Clàssic / Títol', 'Alternatiu'] : ['Convidat', 'Cançons']);
+const episodisPla = (pid) => state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && TIPUS_PLA[tipusPla(g)] && (esMusical(pid) || g.estat !== 'cancellat'))
+  .sort((a, b) => a.numero - b.numero);
 const fet = (g, k) => Boolean(g.pla?.[k]);
 const artDisc = (a) => (a?.artista ? `<b>${esc(a.artista)}</b>${a.disc ? ' · ' + esc(a.disc) : ''}` : '');
-const artCanco = (ll) => (ll || []).filter((a) => a.artista).map((a) => `${esc(a.artista)}${a.canco ? ` <i>«${esc(a.canco)}»</i>` : ''}`).join(', ');
-const textCanco = (ll) => (ll || []).filter((a) => a.artista).map((a) => `${a.artista}${a.canco ? ` «${a.canco}»` : ''}`);
+const artCanco = (ll) => (ll || []).filter((a) => a.artista || a.canco).map((a) => `${esc(a.artista || '')}${a.canco ? ` <i>«${esc(a.canco)}»</i>` : ''}`).join(', ');
+const textCanco = (ll) => (ll || []).filter((a) => a.artista || a.canco).map((a) => `${a.artista || ''}${a.canco ? ` «${a.canco}»` : ''}`.trim());
 function columnesPla(g) {
+  if (tipusPla(g) === 'entrevista') return [`<b>${esc(g.titol || 'Convidat per decidir')}</b>${g.descripcio ? ` · <span class="pla-desc">${esc(g.descripcio)}</span>` : ''}`,
+    artCanco(g.cancons) || '<span class="pla-buit">cançons per triar</span>'];
   if (g.tipusEp === 'pindola') return [`<b><i>${esc(g.titol || 'Píndola resum')}</i></b> · ${artCanco(g.classics)}`, artCanco(g.contemporanis)];
   if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}${g.classics?.length ? ' · ' + artCanco(g.classics) : ''}`, artCanco(g.contemporanis)];
   return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
 }
-const checksPla = (g) => PLA_ESTATS.map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'}><span>${nom}</span></label>`).join('');
+// Primera vegada que s'obre la planificació d'una entrevista: les caselles surten de l'estat, del checklist i de la notícia
+function iniciaPlaEntrevista(pid) {
+  if (esDavid()) return false;
+  let canvi = false;
+  episodisPla(pid).filter((g) => !g.pla).forEach((g) => {
+    const r = ['pendent', 'confirmat', 'gravat', 'editat', 'publicat'].indexOf(g.estat);
+    g.pla = { confirmat: r >= 1 || Boolean(g.checklist?.convidat), cancons: r >= 2, guio: r >= 2 || Boolean(g.checklist?.guio), gravat: r >= 2,
+      editat: r >= 3 || Boolean(g.checklist?.editat), emes: r >= 4, noticia: Boolean(g.enllac) };
+    canvi = true;
+  });
+  return canvi;
+}
+const checksPla = (g) => estatsPla(g.programaId).map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'}><span>${nom}</span></label>`).join('');
 // En David no pot marcar Guió, Gravat ni Emès (l'estudi i l'edició els porta l'Angel), ni tocar res d'un episodi emès
 const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && k !== 'guio' && k !== 'gravat' && k !== 'emes');
 
@@ -528,58 +550,67 @@ function descartaProposta(id) {
   save(); render();
 }
 
+const filtresPla = (pid = ui.planProg) => [['tots', 'Tots els episodis'], ['pendents', "Pendents d'emetre"], ['emesos', 'Emesos'],
+  ...(esMusical(pid) ? [['novalidats', 'Diàlegs per validar']] : [['perconfirmar', 'Convidats per confirmar'], ['sensecancons', 'Sense cançons']])];
+const filtraPla = (eps, f) => eps.filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes'))
+  || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')) || (f === 'perconfirmar' && !fet(g, 'confirmat'))
+  || (f === 'sensecancons' && !fet(g, 'cancons')) || (f === 'david' && g.david));
 function renderPlanificacio(m) {
-  const p = prog(ui.planProg) || state.programes.find((x) => esMusical(x.id));
+  const p = prog(ui.planProg) || state.programes.find((x) => esMusical(x.id)) || state.programes[0];
   if (!p) { ui.view = 'programes'; return renderProgrames(m); }
   ui.planProg = p.id;
+  const musical = esMusical(p.id);
+  if (!musical && iniciaPlaEntrevista(p.id)) save();
   const eps = episodisPla(p.id);
   const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat')), guio = eps.find((g) => !fet(g, 'guio'));
   const tauler = [['enviar', "Enviar a l'emissora", env], ['gravar', 'Proper a gravar', grav], ['guio', 'Proper guió', guio]];
+  const filtres = [...filtresPla(p.id), ...(musical && !esDavid() ? [['david', 'Canviats per en David']] : [])];
+  if (!filtres.some(([v]) => v === ui.filtrePla)) ui.filtrePla = 'tots';
   m.innerHTML = `
     <div class="toolbar">
       <div class="grp"><button class="btn nav-btn" data-action="vista" data-v="programes" aria-label="Torna a Programes">‹</button><h2>Planificació</h2></div>
       <div class="grp">
-        <input type="search" id="cercaPla" placeholder="Cerca artista, disc, tema…" value="${esc(ui.cercaPla || '')}">
-        <select data-filter="filtrePla" aria-label="Què es mostra">${[['tots', 'Tots els episodis'], ['pendents', 'Pendents d\'emetre'], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar'], ...(esDavid() ? [] : [['david', 'Canviats per en David']])]
+        <input type="search" id="cercaPla" placeholder="${musical ? 'Cerca artista, disc, tema…' : 'Cerca convidat, cançó…'}" value="${esc(ui.cercaPla || '')}">
+        <select data-filter="filtrePla" aria-label="Què es mostra">${filtres
           .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button class="btn nomes-angel" data-action="renumera">↻ Renumera</button>
-        <button class="btn primary nomes-david" data-action="proposta">+ Proposta</button>
+        ${musical ? '<button class="btn primary nomes-david" data-action="proposta">+ Proposta</button>' : ''}
         <button class="btn" data-action="exporta-pla">⬇ Exporta</button>
       </div>
     </div>
     <div class="pla-tauler">${tauler.map(([k, nom, g]) => `<button class="pla-t pla-t-${k}" ${g ? `data-action="ves-pla" data-id="${g.id}"` : ''}>
       <span class="pla-t-nom">${nom}</span>
       <span class="pla-t-ep">${g ? `Ep. ${g.numero}${k === 'enviar' && g.emissio ? ' · ' + dataCurta(g.emissio) : ''} · ${esc(g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic' + (g.tema ? ' ' + g.tema : '') : g.titol)}` : 'Tot fet ✓'}</span></button>`).join('')}</div>
-    <div class="legend pla-llegenda">${Object.entries(TIPUS_PLA).map(([k, t]) => `<span><span class="caixa t-${k}"></span>${t}</span>`).join('')}
+    <div class="legend pla-llegenda">${musical ? ['dialeg', 'pindola', 'tematic'].map((k) => `<span><span class="caixa t-${k}"></span>${TIPUS_PLA[k]}</span>`).join('') : ''}
       <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
-      <span class="hint">${p.nom} · ${eps.length} episodis</span></div>
-    ${blocAvisos(p.id)}${blocPropostes()}
+      <span class="hint">${esc(p.nom)} · ${eps.length} ${musical ? 'episodis' : 'programes'}</span></div>
+    ${blocAvisos(p.id)}${musical ? blocPropostes() : ''}
     <div id="plaLlista"></div>`;
   plaLlista();
 }
 function plaLlista() {
-  const eps = episodisPla(ui.planProg);
+  const pid = ui.planProg, musical = esMusical(pid), est = estatsPla(pid), [capA, capB] = capPla(pid);
+  const eps = episodisPla(pid);
   const env = eps.find((g) => !fet(g, 'emes')), grav = eps.find((g) => !fet(g, 'gravat'));
   const q = clauCerca(ui.cercaPla || ''), f = ui.filtrePla || 'tots';
-  const rows = eps
-    .filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes')) || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')) || (f === 'david' && g.david))
-    .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, textMusica(g), g.notes].join(' ')).includes(w)));
+  const rows = filtraPla(eps, f)
+    .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, g.descripcio, textMusica(g), textCanco(g.cancons).join(' '), g.notes].join(' ')).includes(w)));
   const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
   const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
     + (g.david && !esDavid() ? `<span class="pla-marca david" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David</span>` : '');
   const taula = `<div class="panel pla-taula"><table>
-    <thead><tr><th>Núm.</th><th>Tipus</th><th>Emissió</th><th>Clàssic / Títol</th><th>Alternatiu</th>${PLA_ESTATS.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
-    <tbody>${rows.map((g) => { const [a, b] = columnesPla(g); return `<tr id="pla-${g.id}" class="t-${g.tipusEp} ${marca(g)}">
+    <thead><tr><th>Núm.</th>${musical ? '<th>Tipus</th>' : ''}<th>Emissió</th><th>${capA}</th><th>${capB}</th>${est.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
+    <tbody>${rows.map((g) => { const [a, b] = columnesPla(g); return `<tr id="pla-${g.id}" class="t-${tipusPla(g)} ${marca(g)}">
       <td class="nowrap"><button class="pla-n" data-action="edita" data-id="${g.id}">${g.numero}</button>${etiqueta(g)}</td>
-      <td>${TIPUS_PLA[g.tipusEp]}</td>
+      ${musical ? `<td>${TIPUS_PLA[g.tipusEp]}</td>` : ''}
       <td class="nowrap">${g.emissio ? dataCurta(g.emissio) : '—'}</td>
       <td class="pla-obre" data-action="edita" data-id="${g.id}">${a}</td>
       <td class="pla-obre" data-action="edita" data-id="${g.id}">${b}</td>
-      ${PLA_ESTATS.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : 'no'}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'} aria-label="${k}"></td>`).join('')}
+      ${est.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : rosaPla(k, pid) ? 'no' : ''}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'} aria-label="${k}"></td>`).join('')}
       <td class="pla-notes">${esc(g.notes || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
-  const targetes = `<div class="pla-cards">${rows.map((g) => { const [a, b] = columnesPla(g); return `<div id="plac-${g.id}" class="pla-card t-${g.tipusEp} ${marca(g)}">
+  const targetes = `<div class="pla-cards">${rows.map((g) => { const [a, b] = columnesPla(g); return `<div id="plac-${g.id}" class="pla-card t-${tipusPla(g)} ${marca(g)} ${musical ? '' : 'pla-7'}">
       <button class="pla-cos" data-action="edita" data-id="${g.id}">
-        <span class="pla-cap"><b>${g.numero}</b> · ${TIPUS_PLA[g.tipusEp]}${g.emissio ? ' · ' + dataCurta(g.emissio) : ''} ${etiqueta(g)}</span>
+        <span class="pla-cap"><b>${g.numero}</b>${musical ? ' · ' + TIPUS_PLA[g.tipusEp] : ''}${g.emissio ? ' · ' + dataCurta(g.emissio) : ''} ${etiqueta(g)}</span>
         <span class="pla-l">${a}</span>${b ? `<span class="pla-l">${b}</span>` : ''}
         ${g.notes ? `<span class="pla-l pla-notes">${esc(g.notes)}</span>` : ''}
       </button>
@@ -594,21 +625,51 @@ function vesPla(id) {
   el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
 }
 
-// Renumeració: els episodis emesos no es toquen; la resta segueix el cicle i rep dates de dissabte
-function seguentDissabte(ds) {
+// Renumeració: els episodis emesos no es toquen; la resta rep número i data seguits (el mateix dia de la setmana que l'últim emès)
+function seguentEmissio(ds) {
+  const dia = parseYmd(ds).getDay();
   let d = addDays(parseYmd(ds), 7);
-  if (d.getMonth() === 6 || d.getMonth() === 7) {           // juliol i agost, vacances: es torna el 2n dissabte de setembre
+  if (d.getMonth() === 6 || d.getMonth() === 7) {           // juliol i agost, vacances: es torna el 2n dia d'emissió de setembre
     d = new Date(d.getFullYear(), 8, 1);
-    while (d.getDay() !== 6) d = addDays(d, 1);
+    while (d.getDay() !== dia) d = addDays(d, 1);
     d = addDays(d, 7);
   }
   return ymd(d);
+}
+// Entrevista: un convidat per programa. Els que ja tenen data de gravació però encara no número s'afegeixen al final;
+// els cancel·lats deixen el seu número
+function renumeracioEntrevista(pid) {
+  const eps = episodisPla(pid);
+  const ultEmes = eps.reduce((ix, g, i) => (fet(g, 'emes') ? i : ix), -1);
+  const fixos = eps.slice(0, ultEmes + 1), resta = eps.slice(ultEmes + 1);
+  const sense = state.gravacions.filter((g) => g.programaId === pid && !(Number(g.numero) > 0) && g.estat !== 'cancellat' && (g.data || esGravat(g))).sort(ordena);
+  const cancel = state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && g.estat === 'cancellat' && !fet(g, 'emes'));
+  const ordre = [...resta, ...sense].map((g) => [g, {}]);
+  numeraOrdre(ordre, fixos);
+  cancel.forEach((g) => ordre.push([g, { numero: '', emissio: g.emissio }]));
+  const num = fixos.length ? Number(fixos[fixos.length - 1].numero) + resta.length + sense.length : resta.length + sense.length;
+  const canvis = ordre.filter(([g, x]) => g.numero !== x.numero || (x.emissio && g.emissio !== x.emissio)).length;
+  return { ordre, nous: [], sobrants: [], canvis, afegits: sense.length, cancel: cancel.length, desDe: fixos.length ? Number(fixos[fixos.length - 1].numero) + 1 : 1, finsA: num };
+}
+// Posa número i data d'emissió seguits a partir de l'últim episodi emès
+function numeraOrdre(ordre, fixos) {
+  let num = fixos.length ? Number(fixos[fixos.length - 1].numero) : 0;
+  let data = fixos.length ? fixos[fixos.length - 1].emissio : '';
+  const hora = fixos[fixos.length - 1]?.horaEmissio || '';
+  ordre.forEach(([g, extra]) => {
+    num++;
+    if (data) data = seguentEmissio(data);
+    extra.numero = num;
+    if (data) { extra.emissio = data; if (!g.horaEmissio && hora) extra.horaEmissio = hora; }
+  });
+  return num;
 }
 function nouEpPla(pid, tipus) {
   return { id: uid(), programaId: pid, tipusEp: tipus, titol: tipus === 'tematic' ? 'Temàtic per decidir' : '', tema: '', numero: 0, data: '', hora: '', durada: 60,
     estat: 'pendent', presentadors: [], tecnic: '', notes: '', classics: [], contemporanis: [], emissio: '', horaEmissio: '', pla: {} };
 }
 function calculaRenumeracio(pid) {
+  if (!esMusical(pid)) return renumeracioEntrevista(pid);
   const eps = episodisPla(pid);
   const ultEmes = eps.reduce((ix, g, i) => (fet(g, 'emes') ? i : ix), -1);
   const fixos = eps.slice(0, ultEmes + 1), resta = eps.slice(ultEmes + 1);
@@ -630,23 +691,19 @@ function calculaRenumeracio(pid) {
   for (const d of dialegs) { if (grup.length === 4) posaPindola(); ordre.push([d, {}]); grup.push(d); }
   if (grup.length === 4) posaPindola();
   tematics.forEach((t) => ordre.push([t, {}]));
-  let num = fixos.length ? Number(fixos[fixos.length - 1].numero) : 0;
-  let data = fixos.length ? fixos[fixos.length - 1].emissio : '';
-  const hora = fixos[fixos.length - 1]?.horaEmissio || '';
-  ordre.forEach(([g, extra]) => {
-    num++;
-    if (data) data = seguentDissabte(data);
-    extra.numero = num;
-    if (data) { extra.emissio = data; if (!g.horaEmissio && hora) extra.horaEmissio = hora; }
-  });
+  const num = numeraOrdre(ordre, fixos);
   const canvis = ordre.filter(([g, x]) => g.numero !== x.numero || (x.emissio && g.emissio !== x.emissio) || (x.titol && g.titol !== x.titol)).length;
   return { ordre, nous, sobrants: velles, canvis, desDe: fixos.length ? num - ordre.length + 1 : 1, finsA: num };
 }
 function renumera() {
   const r = calculaRenumeracio(ui.planProg);
   if (!r.canvis && !r.nous.length && !r.sobrants.length) return toast('La numeració ja està bé: no cal canviar res.');
-  const txt = [`Es tornarà a numerar del ${r.desDe} al ${r.finsA} seguint el cicle (4 diàlegs · píndola · 4 diàlegs · píndola · temàtic), amb les dates dels dissabtes.`,
-    `${r.canvis} episodis canvien de número, data o títol.`,
+  const musical = esMusical(ui.planProg);
+  const txt = [musical ? `Es tornarà a numerar del ${r.desDe} al ${r.finsA} seguint el cicle (4 diàlegs · píndola · 4 diàlegs · píndola · temàtic), amb les dates dels dissabtes.`
+    : `Es tornarà a numerar del ${r.desDe} al ${r.finsA}: un programa cada setmana, el mateix dia que l'últim emès, amb vacances al juliol i a l'agost.`,
+    `${r.canvis} ${musical ? 'episodis canvien de número, data o títol' : 'programes canvien de número o de data'}.`,
+    r.afegits ? `S'afegeixen al final ${r.afegits} convidats que ja tenen data de gravació però encara no tenien número.` : '',
+    r.cancel ? `${r.cancel} programes cancel·lats deixen el seu número.` : '',
     r.nous.length ? `Es creen ${r.nous.length} episodis nous (píndoles o temàtics per decidir).` : '',
     r.sobrants.length ? `S'esborren ${r.sobrants.length} píndoles que ja no tenen lloc.` : '',
     'Els episodis emesos no es toquen. Continuar?'].filter(Boolean).join('\n\n');
@@ -666,14 +723,14 @@ const carregaExceljs = () => exceljsCarregat || (exceljsCarregat = new Promise((
   document.head.append(sc);
 }));
 async function exportaPla(eps) {
-  const p = prog(ui.planProg);
+  const p = prog(ui.planProg), musical = esMusical(p.id), est = estatsPla(p.id);
   if (!eps.length) return toast('No hi ha episodis per exportar.');
   toast("Preparant l'Excel…");
   let ExcelJS;
   try { ExcelJS = await carregaExceljs(); } catch (e) { return toast("No s'ha pogut preparar l'Excel. Comprova la connexió."); }
   const SI = '☑', NO = '☐';
-  const C = { dialeg: 'BFD7F5', pindola: 'FFDB70', tematic: 'D2B6F0', enviar: 'FF7A1F', gravar: '1F66C9', guio: '6E4FC0',
-    emes: '9FDB95', gravat: '7FB0EE', pendent: 'F4AFAF', guioSi: 'B99DE6', validat: 'FFC94D', cap: '111111' };
+  const hx = (c) => c.replace('#', '');
+  const C = { enviar: 'FF7A1F', gravar: '1F66C9', guio: '6E4FC0', pendent: 'F4AFAF', cap: '111111' };
   const ple = (c) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + c }, bgColor: { argb: 'FF' + c } });
   const linia = { style: 'thin', color: { argb: 'FFD0D0D0' } }, vores = { top: linia, bottom: linia, left: linia, right: linia };
   const wb = new ExcelJS.Workbook();
@@ -682,17 +739,31 @@ async function exportaPla(eps) {
     views: [{ state: 'frozen', ySplit: 9 }],
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '9:9' },
   });
-  const amples = [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 30];
+  // Columnes: musical = Núm · Tipus · Data · 4 de música · 5 caselles · Notes; entrevista = Núm · Data · Convidat · Qui és · Cançons · 7 caselles · Notes
+  const amples = musical ? [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 30] : [7, 13, 24, 32, 52, 11, 10, 8, 9, 9, 8, 10, 30];
+  const nCols = amples.length, cEst = musical ? 8 : 6;
+  const lletra = (n) => String.fromCharCode(64 + n);
+  const colK = (k) => lletra(cEst + est.findIndex(([x]) => x === k));
+  const colData = musical ? 'C' : 'B', colNom = musical ? 'D' : 'C';
   sh.columns = amples.map((width) => ({ width }));
   const F0 = 10, ult = F0 + eps.length - 1;
 
-  // Capçalera: el logo de Blanc & Negre ocupa d'A a M
-  try {
-    const buffer = await fetch('img/capcalera-blanc-i-negre.png').then((r) => r.arrayBuffer());
-    sh.addImage(wb.addImage({ buffer, extension: 'png' }), { tl: { col: 0, row: 0 }, br: { col: 13, row: 1 }, editAs: 'twoCell' });
-  } catch (e) { sh.getCell('A1').value = p.nom; }
-  sh.getRow(1).height = 148.5;
-  sh.getCell('A2').value = 'Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Emissió cada dissabte; juliol i agost, vacances.';
+  // Capçalera: el logo de Blanc & Negre, o el nom del programa en el seu color
+  let ambLogo = false;
+  if (musical) {
+    try {
+      const buffer = await fetch('img/capcalera-blanc-i-negre.png').then((r) => r.arrayBuffer());
+      sh.addImage(wb.addImage({ buffer, extension: 'png' }), { tl: { col: 0, row: 0 }, br: { col: nCols, row: 1 }, editAs: 'twoCell' });
+      sh.getRow(1).height = 148.5; ambLogo = true;
+    } catch (e) { /* sense logo */ }
+  }
+  if (!ambLogo) {
+    sh.mergeCells(1, 1, 1, nCols);
+    Object.assign(sh.getCell('A1'), { value: p.nom, fill: ple(hx(p.color || '#3D4B6B')), font: { bold: true, size: 22, color: { argb: 'FFFFFFFF' } }, alignment: { vertical: 'middle', indent: 1 } });
+    sh.getRow(1).height = 46;
+  }
+  sh.getCell('A2').value = musical ? 'Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Emissió cada dissabte; juliol i agost, vacances.'
+    : 'Un convidat per programa, amb 4 cançons. Emissió cada setmana; juliol i agost, vacances.';
   sh.getCell('A2').font = { italic: true, color: { argb: 'FF666666' } };
   sh.getCell('A3').value = `Exportat de l'app el ${dataCurta(ymd(new Date()))}`;
   sh.getCell('A3').font = { italic: true, size: 9, color: { argb: 'FF888888' } };
@@ -702,67 +773,72 @@ async function exportaPla(eps) {
   const nomEp = (g) => (g.tipusEp === 'dialeg' ? g.classics?.[0]?.artista || g.titol : g.titol);
   const primer = (k) => eps.find((g) => !fet(g, k));
   const resultat = (g, ambData) => (g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + g.emissio.split('-').reverse().map(Number).join('/') : ''} · ${nomEp(g)}` : '—');
-  [["Enviar a l'emissora", C.enviar, 'L', true], ['Proper a gravar', C.gravar, 'K', false], ['Proper guió', C.guio, 'J', false]].forEach(([nom, col, k, ambData], i) => {
-    const r = 4 + i;
+  [["Enviar a l'emissora", C.enviar, 'emes', true], ['Proper a gravar', C.gravar, 'gravat', false], ['Proper guió', C.guio, 'guio', false]].forEach(([nom, col, k, ambData], i) => {
+    const r = 4 + i, ck = colK(k);
     sh.mergeCells(r, 1, r, 3); sh.mergeCells(r, 4, r, 7);
     Object.assign(sh.getCell(r, 1), { value: nom, fill: ple(col), font: { bold: true, color: { argb: 'FFFFFFFF' } }, alignment: { vertical: 'middle', indent: 1 } });
-    const data = ambData ? `&" · "&DAY(INDEX(${R('C')},${M(k)}))&"/"&MONTH(INDEX(${R('C')},${M(k)}))&"/"&YEAR(INDEX(${R('C')},${M(k)}))` : '';
-    sh.getCell(r, 4).value = { formula: `IFERROR("Ep. "&INDEX(${R('A')},${M(k)})${data}&" · "&INDEX(${R('D')},${M(k)}),"—")`,
-      result: resultat(primer({ L: 'emes', K: 'gravat', J: 'guio' }[k]), ambData) };
+    const data = ambData ? `&" · "&DAY(INDEX(${R(colData)},${M(ck)}))&"/"&MONTH(INDEX(${R(colData)},${M(ck)}))&"/"&YEAR(INDEX(${R(colData)},${M(ck)}))` : '';
+    sh.getCell(r, 4).value = { formula: `IFERROR("Ep. "&INDEX(${R('A')},${M(ck)})${data}&" · "&INDEX(${R(colNom)},${M(ck)}),"—")`, result: resultat(primer(k), ambData) };
     sh.getCell(r, 4).font = { bold: true, size: 12 };
     sh.getRow(r).height = 20;
   });
   // Llegenda
-  [['Diàleg', C.dialeg], ['Píndola', C.pindola], ['Temàtic', C.tematic], ['Emès', C.emes], ['Gravat', C.gravat], ['Pendent', C.pendent]].forEach(([t, col], i) => {
+  const llegenda = musical ? [['Diàleg', hx(COL_TIPUS.dialeg)], ['Píndola', hx(COL_TIPUS.pindola)], ['Temàtic', hx(COL_TIPUS.tematic)]] : [];
+  [...llegenda, ['Emès', hx(COL_FET.emes)], ['Gravat', hx(COL_FET.gravat)], ['Pendent', C.pendent]].forEach(([t, col], i) => {
     const r = 4 + Math.floor(i / 3), c = 8 + (i % 3) * 2;
     sh.mergeCells(r, c, r, c + 1);
     Object.assign(sh.getCell(r, c), { value: t, fill: ple(col), border: vores, alignment: { horizontal: 'center' } });
   });
 
   // Capçalera de la taula i files
-  const cap = ['Núm.', 'Tipus', 'Data emissió', 'Artista clàssic / Títol', 'Disc clàssic / Tema', 'Artista contemporani', 'Disc contemporani', 'Validat', 'Canvi', 'Guió', 'Gravat', 'Emès', 'Notes'];
+  const cap = musical ? ['Núm.', 'Tipus', 'Data emissió', 'Artista clàssic / Títol', 'Disc clàssic / Tema', 'Artista contemporani', 'Disc contemporani', ...est.map(([, n]) => n), 'Notes']
+    : ['Núm.', 'Data emissió', 'Convidat', 'Qui és', 'Cançons', ...est.map(([, n]) => n), 'Notes'];
   const fc = sh.getRow(F0 - 1);
   cap.forEach((t, i) => Object.assign(fc.getCell(i + 1), { value: t, fill: ple(C.cap), font: { bold: true, color: { argb: 'FFFFFFFF' } }, border: vores,
     alignment: { horizontal: 'center', vertical: 'middle', wrapText: true } }));
   fc.height = 30;
+  const centrades = [1, musical ? 2 : 0, musical ? 3 : 2, ...est.map((_, i) => cEst + i)];
   eps.forEach((g, i) => {
-    const r = sh.getRow(F0 + i), t = g.tipusEp;
+    const r = sh.getRow(F0 + i), t = tipusPla(g);
     const data = g.emissio ? new Date(Date.UTC(...g.emissio.split('-').map((x, j) => Number(x) - (j === 1 ? 1 : 0)))) : null;
     const [c0, n0] = [g.classics?.[0] || {}, g.contemporanis?.[0] || {}];
-    const vals = t === 'dialeg' ? [c0.artista || '', c0.disc || '', n0.artista || '', n0.disc || '']
-      : t === 'pindola' ? [g.titol || 'Píndola resum', textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), '']
-        : ['Temàtic' + (g.tema ? ' · ' + g.tema : ''), textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), ''];
-    r.values = [g.numero, TIPUS_PLA[t], data, ...vals, ...PLA_ESTATS.map(([k]) => (fet(g, k) ? SI : NO)), g.notes || ''];
+    const vals = !musical ? [g.titol || '', g.descripcio || '', textCanco(g.cancons).join('\n')]
+      : t === 'dialeg' ? [c0.artista || '', c0.disc || '', n0.artista || '', n0.disc || '']
+        : t === 'pindola' ? [g.titol || 'Píndola resum', textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), '']
+          : ['Temàtic' + (g.tema ? ' · ' + g.tema : ''), textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), ''];
+    r.values = musical ? [g.numero, TIPUS_PLA[t], data, ...vals, ...est.map(([k]) => (fet(g, k) ? SI : NO)), g.notes || '']
+      : [g.numero, data, ...vals, ...est.map(([k]) => (fet(g, k) ? SI : NO)), g.notes || ''];
     r.eachCell({ includeEmpty: true }, (cel, c) => {
-      cel.fill = ple(C[t]); cel.border = vores;
-      cel.alignment = { vertical: 'middle', horizontal: [1, 2, 3, 8, 9, 10, 11, 12].includes(c) ? 'center' : 'left', wrapText: c === 13 };
+      cel.fill = ple(hx(COL_TIPUS[t])); cel.border = vores;
+      cel.alignment = { vertical: 'middle', horizontal: centrades.includes(c) ? 'center' : 'left', wrapText: c === nCols || (!musical && c >= 4 && c <= 5) };
     });
-    r.getCell(3).numFmt = 'dd/mm/yyyy';
-    r.getCell(4).font = { bold: true, italic: t !== 'dialeg' };
-    if (t === 'dialeg') r.getCell(6).font = { bold: true };
-    for (let c = 8; c <= 12; c++) {
-      r.getCell(c).font = { size: 13 };
-      r.getCell(c).dataValidation = { type: 'list', allowBlank: false, formulae: [`"${SI},${NO}"`] };
-    }
+    r.getCell(colData).numFmt = 'dd/mm/yyyy';
+    r.getCell(colNom).font = { bold: true, italic: musical && t !== 'dialeg' };
+    if (musical && t === 'dialeg') r.getCell(6).font = { bold: true };
+    est.forEach((_, j) => {
+      r.getCell(cEst + j).font = { size: 13 };
+      r.getCell(cEst + j).dataValidation = { type: 'list', allowBlank: false, formulae: [`"${SI},${NO}"`] };
+    });
   });
 
   // Colors que canvien sols: fila a enviar (taronja), fila a gravar (blau) i caselles d'estat
   const cfFill = (col) => ({ fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: 'FF' + col } } });
-  const zona = `A${F0}:M${ult}`;
+  const zona = `A${F0}:${lletra(nCols)}${ult}`, kE = colK('emes'), kG = colK('gravat');
   sh.addConditionalFormatting({ ref: zona, rules: [
-    { type: 'expression', priority: 1, stopIfTrue: true, formulae: [`AND($L${F0}="${NO}",COUNTIF($L$${F0 - 1}:$L${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.enviar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
-    { type: 'expression', priority: 2, stopIfTrue: true, formulae: [`AND($K${F0}="${NO}",COUNTIF($K$${F0 - 1}:$K${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.gravar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
+    { type: 'expression', priority: 1, stopIfTrue: true, formulae: [`AND($${kE}${F0}="${NO}",COUNTIF($${kE}$${F0 - 1}:$${kE}${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.enviar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
+    { type: 'expression', priority: 2, stopIfTrue: true, formulae: [`AND($${kG}${F0}="${NO}",COUNTIF($${kG}$${F0 - 1}:$${kG}${F0 - 1},"${NO}")=0)`], style: { ...cfFill(C.gravar), font: { bold: true, color: { argb: 'FFFFFFFF' } } } },
   ] });
-  [['L', C.emes], ['K', C.gravat], ['J', C.guioSi]].forEach(([k, col], i) => sh.addConditionalFormatting({ ref: `${k}${F0}:${k}${ult}`, rules: [
-    { type: 'expression', priority: 3 + i * 2, formulae: [`$${k}${F0}="${SI}"`], style: cfFill(col) },
-    { type: 'expression', priority: 4 + i * 2, formulae: [`$${k}${F0}="${NO}"`], style: cfFill(C.pendent) },
-  ] }));
-  sh.addConditionalFormatting({ ref: `H${F0}:I${ult}`, rules: [{ type: 'expression', priority: 9, formulae: [`H${F0}="${SI}"`], style: cfFill(C.validat) }] });
-  sh.autoFilter = { from: { row: F0 - 1, column: 1 }, to: { row: ult, column: 13 } };
+  est.forEach(([k], i) => {
+    const c = colK(k);
+    const regles = [{ type: 'expression', priority: 3 + i * 2, formulae: [`$${c}${F0}="${SI}"`], style: cfFill(hx(COL_FET[k])) }];
+    if (rosaPla(k, p.id)) regles.push({ type: 'expression', priority: 4 + i * 2, formulae: [`$${c}${F0}="${NO}"`], style: cfFill(C.pendent) });
+    sh.addConditionalFormatting({ ref: `${c}${F0}:${c}${ult}`, rules: regles });
+  });
+  sh.autoFilter = { from: { row: F0 - 1, column: 1 }, to: { row: ult, column: nCols } };
 
   // Desa o comparteix (al iPhone, el full de compartir permet desar-lo a Fitxers o enviar-lo)
   const buf = await wb.xlsx.writeBuffer();
-  const nom = `Blanc-i-Negre-Planificacio-${ymd(new Date())}.xlsx`;
+  const nom = nomFitxerPla('xlsx');
   const tipus = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const fitxer = new File([buf], nom, { type: tipus });
   if (mobil.matches && navigator.canShare?.({ files: [fitxer] })) {
@@ -776,13 +852,11 @@ async function exportaPla(eps) {
 }
 
 // Quins episodis entren a l'Excel, al PDF o a la impressió (com el filtre de la Planificació)
-const FILTRES_PLA = [['tots', 'Tots els episodis'], ['pendents', "Pendents d'emetre"], ['emesos', 'Emesos'], ['novalidats', 'Diàlegs per validar']];
-const filtraPla = (eps, f) => eps.filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes'))
-  || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')) || (f === 'david' && g.david));
 function triaExportacio() {
-  const actual = FILTRES_PLA.some(([v]) => v === ui.filtrePla) ? ui.filtrePla : 'tots';
+  const filtres = filtresPla();
+  const actual = filtres.some(([v]) => v === ui.filtrePla) ? ui.filtrePla : 'tots';
   openDialog(`<h3>Exporta la planificació</h3>
-    <label>Què hi entra <select name="quins">${FILTRES_PLA.map(([v, t]) => `<option value="${v}" ${v === actual ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <label>Què hi entra <select name="quins">${filtres.map(([v, t]) => `<option value="${v}" ${v === actual ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
     <div class="exporta-opcions">
       <button type="button" class="btn" data-dlg="pdf"><b>📄 PDF</b><span>Per enviar per WhatsApp o per correu</span></button>
       <button type="button" class="btn" data-dlg="imprimeix"><b>🖨 Imprimeix</b><span>Directament a la impressora</span></button>
@@ -804,10 +878,11 @@ function triaExportacio() {
 // Model comú del PDF i de la impressió: text de cada columna
 const dataNum = (ds) => (ds ? ds.split('-').reverse().map(Number).join('/') : '');
 function filaPla(g) {
-  const t = g.tipusEp, c0 = g.classics?.[0] || {}, k0 = g.contemporanis?.[0] || {};
-  const [a, b] = t === 'dialeg' ? [[c0.artista || 'Clàssic per decidir', c0.disc], [k0.artista || 'Alternatiu per decidir', k0.disc]]
-    : t === 'pindola' ? [[g.titol || 'Píndola resum', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]]
-      : [['Temàtic', g.tema || 'Tema per decidir', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]];
+  const t = tipusPla(g), c0 = g.classics?.[0] || {}, k0 = g.contemporanis?.[0] || {};
+  const [a, b] = t === 'entrevista' ? [[g.titol || 'Convidat per decidir', g.descripcio], textCanco(g.cancons)]
+    : t === 'dialeg' ? [[c0.artista || 'Clàssic per decidir', c0.disc], [k0.artista || 'Alternatiu per decidir', k0.disc]]
+      : t === 'pindola' ? [[g.titol || 'Píndola resum', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]]
+        : [['Temàtic', g.tema || 'Tema per decidir', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]];
   return { g, t, a: a.filter(Boolean), b: b.filter(Boolean) };
 }
 const taulerPla = (eps) => {
@@ -817,9 +892,10 @@ const taulerPla = (eps) => {
     return { nom, col, g, text: g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + dataNum(g.emissio) : ''} · ${nomEp(g)}` : 'Tot fet' };
   });
 };
-const nomFitxerPla = (ext) => `Blanc-i-Negre-Planificacio-${ymd(new Date())}.${ext}`;
-const COL_TIPUS = { dialeg: '#BFD7F5', pindola: '#FFDB70', tematic: '#D2B6F0' };
-const COL_FET = { validat: '#FFC94D', canvi: '#FFC94D', guio: '#B99DE6', gravat: '#7FB0EE', emes: '#9FDB95' };
+const slugPla = () => (prog(ui.planProg)?.nom || 'Planificacio').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, 'i').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const nomFitxerPla = (ext) => `${slugPla()}-Planificacio-${ymd(new Date())}.${ext}`;
+const COL_TIPUS = { dialeg: '#BFD7F5', pindola: '#FFDB70', tematic: '#D2B6F0', entrevista: '#D6DCEC' };
+const COL_FET = { validat: '#FFC94D', canvi: '#FFC94D', confirmat: '#FFC94D', cancons: '#9FD9C9', guio: '#B99DE6', gravat: '#7FB0EE', editat: '#7FD0D6', emes: '#9FDB95', noticia: '#D9D46E' };
 
 // Desa o comparteix un fitxer (al mòbil, el full de compartir: WhatsApp, Mail, Fitxers…)
 async function lliuraFitxer(blob, nom) {
@@ -834,7 +910,7 @@ async function lliuraFitxer(blob, nom) {
   toast('PDF descarregat: ja el pots adjuntar al WhatsApp o al correu.');
 }
 
-/* PDF de la planificació (A4 apaïsat): logo, tauler, llegenda i taula amb els colors de l'app */
+/* PDF de la planificació (A4 apaïsat): capçalera, tauler, llegenda i taula amb els colors de l'app */
 const JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
 const carregaScript = (src) => new Promise((ok, ko) => document.head.append(Object.assign(document.createElement('script'), { src, onload: ok, onerror: ko })));
@@ -856,14 +932,22 @@ async function pdfPla(eps) {
   toast('Preparant el PDF…');
   let JsPDF;
   try { JsPDF = await carregaJspdf(); } catch (e) { return toast("No s'ha pogut preparar el PDF. Comprova la connexió."); }
+  const p = prog(ui.planProg), musical = esMusical(p.id), est = estatsPla(p.id), [capA, capB] = capPla(p.id);
   const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
   const W = 297, M = 10, ample = W - 2 * M;
   const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   let y = M;
-  try { doc.addImage(await imatgeDataUrl('img/capcalera-blanc-i-negre.png'), 'JPEG', M, y, ample, ample * 340 / 2800); y += ample * 340 / 2800 + 4; }
-  catch (e) { doc.setFontSize(18); doc.text(prog(ui.planProg)?.nom || 'Blanc & Negre', M, y + 6); y += 10; }
+  let ambLogo = false;
+  if (musical) {
+    try { doc.addImage(await imatgeDataUrl('img/capcalera-blanc-i-negre.png'), 'JPEG', M, y, ample, ample * 340 / 2800); y += ample * 340 / 2800 + 4; ambLogo = true; } catch (e) { /* sense logo */ }
+  }
+  if (!ambLogo) {
+    doc.setFillColor(...rgb(p.color || '#3D4B6B')); doc.rect(M, y, ample, 16, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text(p.nom, M + 5, y + 10.5);
+    y += 20;
+  }
   doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(100);
-  doc.text(`Planificació · ${eps.length} episodis · ${dataNum(ymd(new Date()))} · Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic`, M, y);
+  doc.text(`Planificació · ${eps.length} ${musical ? 'episodis' : 'programes'} · ${dataNum(ymd(new Date()))}${musical ? ' · Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic' : ' · Un convidat per programa, amb 4 cançons'}`, M, y);
   y += 3;
   // Tauler (sempre sobre tots els episodis)
   const bw = (ample - 8) / 3;
@@ -876,25 +960,31 @@ async function pdfPla(eps) {
   y += 16;
   const env = episodisPla(ui.planProg).find((g) => !fet(g, 'emes')), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
   const files = eps.map(filaPla);
+  const off = musical ? 5 : 4;                                  // primera columna de caselles
+  const amplaEst = 13;
+  const estils = musical
+    ? { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 62 } }
+    : { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 18, halign: 'center' }, 2: { cellWidth: 58 }, 3: { cellWidth: 66 } };
+  est.forEach((_, i) => { estils[off + i] = { cellWidth: amplaEst }; });
+  estils[off + est.length] = { cellWidth: 'auto', fontSize: 7, textColor: [80, 80, 80] };
   doc.autoTable({
     startY: y, margin: { left: M, right: M, bottom: 12 }, theme: 'grid',
-    head: [['Núm.', 'Tipus', 'Emissió', 'Clàssic / Títol', 'Alternatiu', ...PLA_ESTATS.map(([, n]) => n), 'Notes']],
-    body: files.map((f) => Object.assign([f.g.numero, TIPUS_PLA[f.t], dataNum(f.g.emissio), f.a.join('\n'), f.b.join('\n'), '', '', '', '', '', f.g.notes || ''], { f })),
+    head: [['Núm.', ...(musical ? ['Tipus'] : []), 'Emissió', capA, capB, ...est.map(([, n]) => n), 'Notes']],
+    body: files.map((f) => Object.assign([f.g.numero, ...(musical ? [TIPUS_PLA[f.t]] : []), dataNum(f.g.emissio), f.a.join('\n'), f.b.join('\n'), ...est.map(() => ''), f.g.notes || ''], { f })),
     rowPageBreak: 'avoid',
     styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.4, lineColor: [205, 205, 205], lineWidth: 0.2, textColor: [14, 14, 14], valign: 'middle', overflow: 'linebreak' },
     headStyles: { fillColor: [17, 17, 17], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 7.5 },
-    columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 15 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 62 }, 4: { cellWidth: 62 },
-      5: { cellWidth: 13 }, 6: { cellWidth: 13 }, 7: { cellWidth: 13 }, 8: { cellWidth: 13 }, 9: { cellWidth: 13 }, 10: { cellWidth: 'auto', fontSize: 7, textColor: [80, 80, 80] } },
+    columnStyles: estils,
     didParseCell(d) {
       if (d.section !== 'body') return;
-      const f = d.row.raw.f, k = PLA_ESTATS[d.column.index - 5]?.[0];
+      const f = d.row.raw.f, k = est[d.column.index - off]?.[0];
       d.cell.styles.fillColor = rgb(COL_TIPUS[f.t]);
-      if ((d.column.index === 3 || d.column.index === 4) && f.t !== 'dialeg') d.cell.styles.fontStyle = 'italic';
-      if (k) d.cell.styles.fillColor = rgb(fet(f.g, k) ? COL_FET[k] : ['guio', 'gravat', 'emes'].includes(k) ? '#F4AFAF' : COL_TIPUS[f.t]);
+      if ((d.column.index === off - 2 || d.column.index === off - 1) && musical && f.t !== 'dialeg') d.cell.styles.fontStyle = 'italic';
+      if (k) d.cell.styles.fillColor = rgb(fet(f.g, k) ? COL_FET[k] : rosaPla(k, p.id) ? '#F4AFAF' : COL_TIPUS[f.t]);
       if (d.column.index === 0 && (f.g === env || f.g === grav)) { d.cell.styles.fillColor = rgb(f.g === env ? '#FF7A1F' : '#1F66C9'); d.cell.styles.textColor = 255; }
     },
     didDrawCell(d) {
-      const k = PLA_ESTATS[d.column.index - 5]?.[0];
+      const k = est[d.column.index - off]?.[0];
       if (d.section !== 'body' || !k || !d.row.raw?.f || !fet(d.row.raw.f.g, k)) return;
       const cx = d.cell.x + d.cell.width / 2, cy = d.cell.y + d.cell.height / 2;     // ✓ dibuixat
       doc.setDrawColor(14); doc.setLineWidth(0.6);
@@ -902,12 +992,12 @@ async function pdfPla(eps) {
     },
     didDrawPage(d) {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(120);
-      doc.text(`Blanc & Negre · Planificació · pàgina ${d.pageNumber}`, W - M, 205, { align: 'right' });
+      doc.text(`${p.nom} · Planificació · pàgina ${d.pageNumber}`, W - M, 205, { align: 'right' });
     },
   });
   // Llegenda al final
-  let ly = Math.min(doc.lastAutoTable.finalY + 5, 200);
-  [['Diàleg', COL_TIPUS.dialeg], ['Píndola', COL_TIPUS.pindola], ['Temàtic', COL_TIPUS.tematic], ['Per enviar', '#FF7A1F'], ['Per gravar', '#1F66C9'], ['Pendent', '#F4AFAF']].forEach(([t, c], i) => {
+  const ly = Math.min(doc.lastAutoTable.finalY + 5, 200);
+  [...(musical ? [['Diàleg', COL_TIPUS.dialeg], ['Píndola', COL_TIPUS.pindola], ['Temàtic', COL_TIPUS.tematic]] : []), ['Per enviar', '#FF7A1F'], ['Per gravar', '#1F66C9'], ['Pendent', '#F4AFAF']].forEach(([t, c], i) => {
     const lx = M + i * 30;
     doc.setFillColor(...rgb(c)); doc.rect(lx, ly - 3, 4, 4, 'F');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(60); doc.text(t, lx + 5.5, ly);
@@ -919,25 +1009,27 @@ async function pdfPla(eps) {
 function imprimeixPla(eps) {
   let z = $('#zonaImpressio');
   if (!z) { z = Object.assign(document.createElement('div'), { id: 'zonaImpressio' }); document.body.append(z); }
+  const p = prog(ui.planProg), musical = esMusical(p.id), est = estatsPla(p.id), [capA, capB] = capPla(p.id);
   const env = episodisPla(ui.planProg).find((g) => !fet(g, 'emes')), grav = episodisPla(ui.planProg).find((g) => !fet(g, 'gravat'));
   const linies = (ll, primeraNegreta) => ll.map((x, i) => (i === 0 && primeraNegreta ? `<b>${esc(x)}</b>` : esc(x))).join('<br>');
   z.className = 'pla';
-  z.innerHTML = `<img class="zp-logo" src="img/capcalera-blanc-i-negre.png" alt="Blanc & Negre">
-    <p class="zp-sub">Planificació · ${eps.length} episodis · imprès el ${dataNum(ymd(new Date()))} · Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic</p>
+  z.innerHTML = `${musical ? '<img class="zp-logo" src="img/capcalera-blanc-i-negre.png" alt="Blanc & Negre">'
+      : `<div class="zp-titol" style="background:${esc(p.color || '#3D4B6B')}">${esc(p.nom)}</div>`}
+    <p class="zp-sub">Planificació · ${eps.length} ${musical ? 'episodis' : 'programes'} · imprès el ${dataNum(ymd(new Date()))}${musical ? ' · Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic' : ' · Un convidat per programa, amb 4 cançons'}</p>
     <div class="zp-tauler">${taulerPla(episodisPla(ui.planProg)).map((x) => `<div style="background:${x.col}"><span>${esc(x.nom)}</span><b>${esc(x.text)}</b></div>`).join('')}</div>
-    <table><thead><tr><th>Núm.</th><th>Tipus</th><th>Emissió</th><th>Clàssic / Títol</th><th>Alternatiu</th>${PLA_ESTATS.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
+    <table><thead><tr><th>Núm.</th>${musical ? '<th>Tipus</th>' : ''}<th>Emissió</th><th>${capA}</th><th>${capB}</th>${est.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
     <tbody>${eps.map(filaPla).map((f) => `<tr style="background:${COL_TIPUS[f.t]}">
       <td class="c num" ${f.g === env || f.g === grav ? `style="background:${f.g === env ? '#FF7A1F' : '#1F66C9'};color:#fff"` : ''}>${f.g.numero}</td>
-      <td>${TIPUS_PLA[f.t]}</td><td class="c">${dataNum(f.g.emissio)}</td>
-      <td class="${f.t === 'dialeg' ? '' : 'it'}">${linies(f.a, true)}</td><td>${linies(f.b, f.t === 'dialeg')}</td>
-      ${PLA_ESTATS.map(([k]) => `<td class="c" style="background:${fet(f.g, k) ? COL_FET[k] : ['guio', 'gravat', 'emes'].includes(k) ? '#F4AFAF' : 'transparent'}">${fet(f.g, k) ? '✓' : ''}</td>`).join('')}
+      ${musical ? `<td>${TIPUS_PLA[f.t]}</td>` : ''}<td class="c">${dataNum(f.g.emissio)}</td>
+      <td class="${musical && f.t !== 'dialeg' ? 'it' : ''}">${linies(f.a, true)}</td><td>${linies(f.b, f.t === 'dialeg')}</td>
+      ${est.map(([k]) => `<td class="c" style="background:${fet(f.g, k) ? COL_FET[k] : rosaPla(k, p.id) ? '#F4AFAF' : 'transparent'}">${fet(f.g, k) ? '✓' : ''}</td>`).join('')}
       <td class="zp-notes">${esc(f.g.notes || '')}</td></tr>`).join('')}</tbody></table>`;
   const titolAbans = document.title;
   document.title = nomFitxerPla('pdf').replace('.pdf', '');
   window.addEventListener('afterprint', () => { document.title = titolAbans; z.className = ''; }, { once: true });
   const img = z.querySelector('img');
   const imprimeixAra = () => setTimeout(() => window.print(), 50);
-  if (img.complete) imprimeixAra(); else { img.onload = imprimeixAra; img.onerror = imprimeixAra; }
+  if (!img || img.complete) imprimeixAra(); else { img.onload = imprimeixAra; img.onerror = imprimeixAra; }
 }
 
 /* ---------- Estadístiques ---------- */
@@ -1550,6 +1642,11 @@ function openGravacio(g, dataPerDefecte) {
       <label style="flex:1">Núm. episodi <input type="number" inputmode="numeric" name="numero" min="0" value="${esc(g.numero ?? '')}"></label>
     </div>
     <label>Programa / podcast <select name="programaId">${progOptions(g.programaId, '— Sense programa —')}</select></label>
+    <fieldset class="nomes-entrevista cancons-conv"><legend>🎵 Convidat i cançons</legend>
+      <label>Qui és <input name="descripcio" value="${esc(g.descripcio || '')}" placeholder="Ex.: Pilot de rescat de l'hospital Trueta" autocomplete="off"></label>
+      ${[0, 1, 2, 3].map((i) => `<div class="cv-fila"><input name="cv_art_${i}" value="${esc(g.cancons?.[i]?.artista || '')}" placeholder="Artista ${i + 1}" autocomplete="off">
+        <input name="cv_canco_${i}" value="${esc(g.cancons?.[i]?.canco || '')}" placeholder="Cançó" autocomplete="off"></div>`).join('')}
+    </fieldset>
     <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
       <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || (g.numero || g.classics?.length ? 'dialeg' : 'sessio')) === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
       <label class="nomes-tematic">Tema <input name="tema" value="${esc(g.tema || '')}" placeholder="Ex.: Guitarres"></label>
@@ -1639,6 +1736,13 @@ function openGravacio(g, dataPerDefecte) {
         const base = nou ? { programaId: bnId(), tipusEp: 'sessio', numero: '', estat: 'pendent' } : g;
         fixos.forEach((k) => { if (k in base) dades[k] = base[k]; else delete dades[k]; });
         if (numerat && g.tipusEp === 'dialeg') dades.titol = titolDialeg({ classics: g.classics || [], contemporanis: dades.contemporanis || [] }) || g.titol;
+      }
+      // Entrevista: qui és el convidat i les seves 4 cançons (amb les 4 posades, es marca sola la casella «Cançons»)
+      if (!musical) {
+        dades.descripcio = String(f.get('descripcio') || '').trim();
+        dades.cancons = [0, 1, 2, 3].map((i) => ({ artista: String(f.get(`cv_art_${i}`) || '').trim(), canco: String(f.get(`cv_canco_${i}`) || '').trim() }))
+          .filter((c) => c.artista || c.canco);
+        if (dades.cancons.filter((c) => c.artista && c.canco).length === 4 && !fet(g, 'cancons')) dades.pla = { ...(g.pla || {}), cancons: true };
       }
       // Entrevista: el camp de dalt és el convidat; és obligatori i en fa el títol
       const nomsConv = musical ? [] : [...new Set(dades.titol.split(',').map((x) => x.trim()).filter(Boolean))];
@@ -1955,11 +2059,17 @@ $('#main').addEventListener('change', (e) => {
     if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat i Emès només els marca l'Angel."); return; }
     if (g) {
       g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
-      const k = t.dataset.k;                                  // l'estat de la gravació segueix les caselles
-      if (k === 'emes' && t.checked) g.estat = 'publicat';
-      else if (k === 'gravat' && t.checked && !GRAVADA.includes(g.estat)) g.estat = 'gravat';
-      else if (k === 'emes' && !t.checked && g.estat === 'publicat') g.estat = fet(g, 'gravat') ? 'gravat' : 'pendent';
-      else if (k === 'gravat' && !t.checked && GRAVADA.includes(g.estat) && !fet(g, 'emes')) g.estat = 'pendent';
+      // L'estat de la gravació segueix les caselles: Confirmat → Gravat → Editat → Emès (publicat)
+      const k = t.dataset.k, ESTAT_DE = { confirmat: 'confirmat', gravat: 'gravat', editat: 'editat', emes: 'publicat' };
+      const ORDRE = ['pendent', 'confirmat', 'gravat', 'editat', 'publicat'], ara = ORDRE.indexOf(g.estat);
+      if (ESTAT_DE[k] && g.estat !== 'cancellat') {
+        if (t.checked && ORDRE.indexOf(ESTAT_DE[k]) > ara) g.estat = ESTAT_DE[k];
+        if (!t.checked) {
+          const alt = ['emes', 'editat', 'gravat', 'confirmat'].find((x) => fet(g, x));
+          const nou = alt ? ESTAT_DE[alt] : 'pendent';
+          if (ORDRE.indexOf(nou) < ara) g.estat = nou;
+        }
+      }
       save();
       const y = window.scrollY; render(); window.scrollTo(0, y);
     }
