@@ -159,7 +159,10 @@ const horari = (g) => (g.data && g.hora ? `${g.hora}–${fromMin(toMin(g.hora) +
 const titolG = (g) => (g.numero ? `Ep. ${g.numero} · ` : '') + (g.titol || '');
 const emissioText = (g) => (g.emissio ? `Emissió Girona FM: ${dataCurta(g.emissio)}${g.horaEmissio ? ', ' + g.horaEmissio : ''}` : '');
 const GRAVADA = ['gravat', 'editat', 'publicat'];
-const jaGravada = (g, avui = ymd(new Date())) => GRAVADA.includes(g.estat) || Boolean(g.data && g.data <= avui);
+// Gravat / emès: ho diu l'estat de la gravació o les caselles de la Planificació (n'hi ha prou amb un dels dos)
+const esGravat = (g) => GRAVADA.includes(g.estat) || Boolean(g.pla?.gravat || g.pla?.emes);
+const esPublicat = (g) => g.estat === 'publicat' || Boolean(g.pla?.emes);
+const jaGravada = (g, avui = ymd(new Date())) => esGravat(g) || Boolean(g.data && g.data <= avui);
 const equip = (g) => [...(g.presentadors || []).map(pers), pers(g.tecnic)].filter(Boolean).map((p) => p.nom);
 // Les persones poden ser de l'equip o convidats (tipus: 'convidat')
 const equipPers = () => state.persones.filter((p) => p.tipus !== 'convidat');
@@ -962,10 +965,10 @@ function grupsStats() {
   const del = hist ? tots : tots.filter((g) => dataRef(g).startsWith(String(any)));
   const pid = progStats();
   const grups = {
-    gravats: [`Episodis gravats ${hist ? '· històric' : any}`, del.filter((g) => GRAVADA.includes(g.estat))],
-    publicats: [`Publicats ${hist ? '· històric' : any}`, del.filter((g) => g.estat === 'publicat')],
-    perPublicar: ['Pendents de publicar', tots.filter((g) => g.estat === 'gravat' || g.estat === 'editat')],
-    perGravar: ['Pendents de gravar', tots.filter((g) => g.estat === 'pendent' || g.estat === 'confirmat')],
+    gravats: [`Episodis gravats ${hist ? '· històric' : any}`, del.filter(esGravat)],
+    publicats: [`Publicats / emesos ${hist ? '· històric' : any}`, del.filter(esPublicat)],
+    perPublicar: ['Pendents de publicar', tots.filter((g) => esGravat(g) && !esPublicat(g) && g.estat !== 'cancellat')],
+    perGravar: ['Pendents de gravar', tots.filter((g) => !esGravat(g) && (g.estat === 'pendent' || g.estat === 'confirmat'))],
   };
   if (teConvidats()) {
     const conv = convidatsPers();
@@ -1043,8 +1046,8 @@ function estadistiques() {
   const periodes = hist
     ? [...new Set(del.filter(dataRef).map((g) => Number(dataRef(g).slice(0, 4))))].sort((a, b) => a - b).map((y) => ({ m: y, llarg: String(y), curt: String(y) }))
     : MESOS.map((nom, i) => ({ m: i + 1, llarg: cap(nom), curt: cap(nom).slice(0, 3) }));
-  const gravades = del.filter((g) => GRAVADA.includes(g.estat));
-  const publicades = del.filter((g) => g.estat === 'publicat');
+  const gravades = del.filter(esGravat);
+  const publicades = del.filter(esPublicat);
   const progs = progStats() ? [prog(progStats())]
     : [...state.programes, ...(del.some((g) => !prog(g.programaId)) ? [{ id: '', nom: 'Sense programa', color: '#868E96' }] : [])];
   const compta = (llista, pid, mes) => llista.filter((g) => (g.programaId || '') === pid && periode(mes)(g)).length;
@@ -1085,7 +1088,7 @@ function estadistiques() {
     <div class="panel"><table class="taula-stats">
       <thead><tr><th>${hist ? 'Any' : 'Mes'}</th>${progs.map((p) => `<th><span class="dot" style="--c:${p.color}"></span>${esc(p.nom)}</th>`).join('')}</tr></thead>
       <tbody>${files}${totals}</tbody></table></div>
-    <p class="hint" style="margin-top:8px">Toca una xifra, un mes o un total per veure'n el llistat. «Gravats» compta els episodis en estat Gravat, Editat o Publicat. «Publicats», només els Publicats. Si un episodi no té data de gravació, es compta pel mes d'emissió.</p>
+    <p class="hint" style="margin-top:8px">Toca una xifra, un mes o un total per veure'n el llistat. «Gravats» compta els episodis en estat Gravat, Editat o Publicat, o amb la casella Gravat o Emès marcada a la Planificació. «Publicats / emesos», els Publicats o amb la casella Emès. Si un episodi no té data de gravació, es compta pel mes d'emissió.</p>
   </div>`;
 }
 
@@ -1952,6 +1955,11 @@ $('#main').addEventListener('change', (e) => {
     if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat i Emès només els marca l'Angel."); return; }
     if (g) {
       g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
+      const k = t.dataset.k;                                  // l'estat de la gravació segueix les caselles
+      if (k === 'emes' && t.checked) g.estat = 'publicat';
+      else if (k === 'gravat' && t.checked && !GRAVADA.includes(g.estat)) g.estat = 'gravat';
+      else if (k === 'emes' && !t.checked && g.estat === 'publicat') g.estat = fet(g, 'gravat') ? 'gravat' : 'pendent';
+      else if (k === 'gravat' && !t.checked && GRAVADA.includes(g.estat) && !fet(g, 'emes')) g.estat = 'pendent';
       save();
       const y = window.scrollY; render(); window.scrollTo(0, y);
     }
