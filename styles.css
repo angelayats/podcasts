@@ -69,6 +69,9 @@ h2, h3 { font-family: var(--font-title); font-weight: 600; letter-spacing: .3px;
   /* text que inverteix el color a cada meitat */
   background: linear-gradient(90deg, var(--ink) 50%, var(--cream) 50%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
+  /* Les lletres clares sobre negre semblen més grosses (il·lusió òptica): un contorn negre molt fi
+     engreixa una mica les fosques i aprima les clares, i així totes es veuen igual */
+  -webkit-text-stroke: 0.012em var(--ink);
 }
 .splash-sub {
   margin-top: 10px; font-size: 16px;
