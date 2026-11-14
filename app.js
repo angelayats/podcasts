@@ -1847,6 +1847,16 @@ function openGravacio(g, dataPerDefecte) {
    en triar-ne una s'omplen l'artista i el títol ben escrits i es guarda l'enllaç per escoltar-la.
    Fa servir el cercador públic d'Apple (el mateix catàleg que Apple Music): no cal iniciar sessió. */
 const netejaTitol = (t) => String(t || '').replace(/\s*[([][^)\]]*remaster[^)\]]*[)\]]/ig, '').replace(/\s+-\s+.*remaster.*$/i, '').trim();
+// A l'ordinador i a Android es pregunta directament a Apple. A l'iPhone Apple redirigeix la cerca a l'app Música
+// i falla: llavors es fa a través de la funció «musica» de Supabase, que cerca des del servidor.
+let cercaPerServidor = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function cercaApple(q) {
+  const servidor = () => fetch(`${window.PODCASTS_CONFIG.supabaseUrl}/functions/v1/musica?term=${encodeURIComponent(q)}`).then((x) => { if (!x.ok) throw new Error(x.status); return x.json(); });
+  if (cercaPerServidor) return servidor();
+  try {
+    return await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&country=es&limit=8`).then((x) => x.json());
+  } catch (e) { cercaPerServidor = true; return servidor(); }
+}
 function activaCercaMusica(f) {
   f.querySelectorAll('input[name*="_canco_"]').forEach((inp) => {
     const [pre, , i] = inp.name.split('_');
@@ -1865,7 +1875,7 @@ function activaCercaMusica(f) {
       const n = ++darrera;
       llista.innerHTML = '<span class="hint">Cercant…</span>'; llista.hidden = false;
       try {
-        const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&country=es&limit=8`).then((x) => x.json());
+        const r = await cercaApple(q);
         if (n !== darrera) return;
         const vist = new Set();
         const res = (r.results || []).filter((x) => { const k = clauCerca(netejaTitol(x.trackName) + x.artistName); if (vist.has(k)) return false; vist.add(k); return true; });
