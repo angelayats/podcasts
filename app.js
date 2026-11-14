@@ -408,15 +408,15 @@ function renderProgrames(m) {
    Blanc & Negre (musical): diàlegs, píndoles resum i temàtics. Cicle: 4 diàlegs · píndola · 4 diàlegs · píndola · temàtic. Cada dissabte.
    La cara oculta de la lluna (entrevista): un convidat per programa, amb 4 cançons. Cada dijous.
    Tots dos: juliol i agost, vacances. */
-const PLA_ESTATS = [['validat', 'Validat'], ['canvi', 'Canvi'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['emes', 'Emès']];
+const PLA_ESTATS = [['validat', 'Validat'], ['canvi', 'Canvi'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['enviat', 'Enviat'], ['emes', 'Emès']];
 const ESTATS_ENTREVISTA = [['confirmat', 'Confirmat'], ['cancons', 'Cançons'], ['guio', 'Guió'], ['gravat', 'Gravat'], ['editat', 'Editat'], ['enviat', 'Enviat'], ['emes', 'Emès'], ['noticia', 'Notícia']];
-// Quina casella diu que ja s'ha enviat a l'emissora: a les entrevistes, «Enviat»; a Blanc & Negre, «Emès»
-const kEnvia = (pid = ui.planProg) => (esMusical(pid) ? 'emes' : 'enviat');
+// La casella que diu que ja s'ha enviat a l'emissora (el tauler «Enviar a l'emissora» la fa servir)
+const kEnvia = () => 'enviat';
 const TIPUS_PLA = { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic', entrevista: 'Entrevista' };
 const estatsPla = (pid = ui.planProg) => (esMusical(pid) ? PLA_ESTATS : ESTATS_ENTREVISTA);
 const tipusPla = (g) => (esMusical(g.programaId) ? g.tipusEp : 'entrevista');
 // Caselles que surten en vermell clar mentre no estan fetes
-const rosaPla = (k, pid = ui.planProg) => (esMusical(pid) ? ['guio', 'gravat', 'emes'] : ['confirmat', 'cancons', 'guio', 'gravat', 'editat', 'enviat', 'emes']).includes(k);
+const rosaPla = (k, pid = ui.planProg) => (esMusical(pid) ? ['guio', 'gravat', 'enviat', 'emes'] : ['confirmat', 'cancons', 'guio', 'gravat', 'editat', 'enviat', 'emes']).includes(k);
 const capPla = (pid = ui.planProg) => (esMusical(pid) ? ['Clàssic / Títol', 'Alternatiu'] : ['Convidat', 'Cançons']);
 const episodisPla = (pid) => state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && TIPUS_PLA[tipusPla(g)] && (esMusical(pid) || g.estat !== 'cancellat'))
   .sort((a, b) => a.numero - b.numero);
@@ -445,8 +445,8 @@ function iniciaPlaEntrevista(pid) {
   return canvi;
 }
 const checksPla = (g) => estatsPla(g.programaId).map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'}><span>${nom}</span></label>`).join('');
-// En David no pot marcar Guió, Gravat ni Emès (l'estudi i l'edició els porta l'Angel), ni tocar res d'un episodi emès
-const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && k !== 'guio' && k !== 'gravat' && k !== 'emes');
+// En David només pot marcar Validat i Canvi (l'estudi, l'edició i l'enviament els porta l'Angel), i res d'un episodi emès
+const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && (k === 'validat' || k === 'canvi'));
 
 /* Canvis d'en David (els marca el servidor) i propostes de diàlegs i temàtics */
 const NOMS_CAMPS = { contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
@@ -611,7 +611,7 @@ function plaLlista() {
       <td class="pla-obre" data-action="edita" data-id="${g.id}">${b}</td>
       ${est.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : rosaPla(k, pid) ? 'no' : ''}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'} aria-label="${k}"></td>`).join('')}
       <td class="pla-notes">${esc(g.notes || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
-  const targetes = `<div class="pla-cards">${rows.map((g) => { const [a, b] = columnesPla(g); return `<div id="plac-${g.id}" class="pla-card t-${tipusPla(g)} ${marca(g)} ${musical ? '' : 'pla-7'}">
+  const targetes = `<div class="pla-cards">${rows.map((g) => { const [a, b] = columnesPla(g); return `<div id="plac-${g.id}" class="pla-card t-${tipusPla(g)} ${marca(g)} ${est.length > 5 ? 'pla-7' : ''}">
       <button class="pla-cos" data-action="edita" data-id="${g.id}">
         <span class="pla-cap"><b>${g.numero}</b>${musical ? ' · ' + TIPUS_PLA[g.tipusEp] : ''}${g.emissio ? ' · ' + dataCurta(g.emissio) : ''} ${etiqueta(g)}</span>
         <span class="pla-l">${a}</span>${b ? `<span class="pla-l">${b}</span>` : ''}
@@ -743,7 +743,7 @@ async function exportaPla(eps) {
     pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '9:9' },
   });
   // Columnes: musical = Núm · Tipus · Data · 4 de música · 5 caselles · Notes; entrevista = Núm · Data · Convidat · Qui és · Cançons · 7 caselles · Notes
-  const amples = musical ? [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 30] : [7, 13, 24, 32, 48, 11, 10, 8, 9, 9, 9, 8, 10, 30];
+  const amples = musical ? [7, 10, 13, 28, 36, 28, 36, 9, 9, 9, 9, 9, 9, 30] : [7, 13, 24, 32, 48, 11, 10, 8, 9, 9, 9, 8, 10, 30];
   const nCols = amples.length, cEst = musical ? 8 : 6;
   const lletra = (n) => String.fromCharCode(64 + n);
   const colK = (k) => lletra(cEst + est.findIndex(([x]) => x === k));
@@ -2111,7 +2111,7 @@ $('#main').addEventListener('change', (e) => {
   const t = e.target;
   if (t.dataset.pla) {
     const g = state.gravacions.find((x) => x.id === t.dataset.pla);
-    if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat i Emès només els marca l'Angel."); return; }
+    if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat, Enviat i Emès només els marca l'Angel."); return; }
     if (g) {
       g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
       // L'estat de la gravació segueix les caselles: Confirmat → Gravat → Editat → Emès (publicat)
