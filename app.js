@@ -413,7 +413,7 @@ const artCanco = (ll) => (ll || []).filter((a) => a.artista).map((a) => `${esc(a
 const textCanco = (ll) => (ll || []).filter((a) => a.artista).map((a) => `${a.artista}${a.canco ? ` «${a.canco}»` : ''}`);
 function columnesPla(g) {
   if (g.tipusEp === 'pindola') return [`<b><i>${esc(g.titol || 'Píndola resum')}</i></b> · ${artCanco(g.classics)}`, artCanco(g.contemporanis)];
-  if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}`, ''];
+  if (g.tipusEp === 'tematic') return [`<b><i>Temàtic</i></b>${g.tema ? ' · ' + esc(g.tema) : ' · <span class="pla-buit">tema per decidir</span>'}${g.classics?.length ? ' · ' + artCanco(g.classics) : ''}`, artCanco(g.contemporanis)];
   return [artDisc(g.classics?.[0]) || '<span class="pla-buit">clàssic per decidir</span>', artDisc(g.contemporanis?.[0]) || '<span class="pla-buit">alternatiu per decidir</span>'];
 }
 const checksPla = (g) => PLA_ESTATS.map(([k, nom]) => `<label class="pc pc-${k}" title="${nom}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'}><span>${nom}</span></label>`).join('');
@@ -728,7 +728,7 @@ async function exportaPla(eps) {
     const [c0, n0] = [g.classics?.[0] || {}, g.contemporanis?.[0] || {}];
     const vals = t === 'dialeg' ? [c0.artista || '', c0.disc || '', n0.artista || '', n0.disc || '']
       : t === 'pindola' ? [g.titol || 'Píndola resum', textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), '']
-        : ['Temàtic', g.tema || '', '', ''];
+        : ['Temàtic' + (g.tema ? ' · ' + g.tema : ''), textCanco(g.classics).join(', '), textCanco(g.contemporanis).join(', '), ''];
     r.values = [g.numero, TIPUS_PLA[t], data, ...vals, ...PLA_ESTATS.map(([k]) => (fet(g, k) ? SI : NO)), g.notes || ''];
     r.eachCell({ includeEmpty: true }, (cel, c) => {
       cel.fill = ple(C[t]); cel.border = vores;
@@ -804,7 +804,7 @@ function filaPla(g) {
   const t = g.tipusEp, c0 = g.classics?.[0] || {}, k0 = g.contemporanis?.[0] || {};
   const [a, b] = t === 'dialeg' ? [[c0.artista || 'Clàssic per decidir', c0.disc], [k0.artista || 'Alternatiu per decidir', k0.disc]]
     : t === 'pindola' ? [[g.titol || 'Píndola resum', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]]
-      : [['Temàtic', g.tema || 'Tema per decidir'], ['']];
+      : [['Temàtic', g.tema || 'Tema per decidir', ...textCanco(g.classics)], ['', ...textCanco(g.contemporanis)]];
   return { g, t, a: a.filter(Boolean), b: b.filter(Boolean) };
 }
 const taulerPla = (eps) => {
@@ -1554,7 +1554,7 @@ function openGravacio(g, dataPerDefecte) {
         <div><h4>${nom}</h4>${[0, 1, 2, 3, 4].map((i) => `<div class="art-fila" data-i="${i}">
           <input name="${pre}_art_${i}" value="${esc(llista?.[i]?.artista || '')}" placeholder="Artista" autocomplete="off">
           <input name="${pre}_disc_${i}" value="${esc(llista?.[i]?.disc || '')}" placeholder="Disc" class="nomes-dialeg" autocomplete="off">
-          <input name="${pre}_canco_${i}" value="${esc(llista?.[i]?.canco || '')}" placeholder="Cançó" class="nomes-pindola" autocomplete="off"></div>`).join('')}</div>`).join('')}
+          <input name="${pre}_canco_${i}" value="${esc(llista?.[i]?.canco || '')}" placeholder="Cançó" class="nomes-canco" autocomplete="off"></div>`).join('')}</div>`).join('')}
       </div>
       <button type="button" class="btn small nomes-pindola" data-dlg="omple-pindola">↺ Omple els clàssics amb els dels 4 diàlegs anteriors</button>
       <span class="hint" id="previaTitol"></span>
@@ -1620,6 +1620,12 @@ function openGravacio(g, dataPerDefecte) {
         const m = llegeixMusica(f);
         Object.assign(dades, m);
         if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
+        // Temàtic: 10 cançons de 10 artistes diferents
+        if (m.tipusEp === 'tematic') {
+          const noms = [...m.classics, ...m.contemporanis].map((a) => clauCerca(a.artista));
+          const repetits = [...new Set(noms.filter((n, i) => noms.indexOf(n) !== i))];
+          if (repetits.length && !confirm(`Al temàtic hi ha artistes repetits (${repetits.join(', ')}). Han de ser 10 artistes diferents.\n\nVols desar-lo igualment?`)) return false;
+        }
         else if (!dades.titol) dades.titol = m.tipusEp === 'sessio' ? SESSIO : m.tipusEp === 'tematic' ? `Temàtic ${m.tema}`.trim() : 'Píndola resum';
       }
       // En David: el que no pot canviar es queda com estava (el servidor també ho comprova)
@@ -1745,7 +1751,7 @@ function llegeixMusica(f) {
   const camp = (nom) => String(f.get(nom) || '').trim();
   const llista = (pre) => [0, 1, 2, 3, 4].slice(0, n).map((i) => {
     const a = { artista: camp(`${pre}_art_${i}`) };
-    const disc = tipusEp === 'dialeg' ? camp(`${pre}_disc_${i}`) : '', canco = tipusEp === 'pindola' ? camp(`${pre}_canco_${i}`) : '';
+    const disc = tipusEp === 'dialeg' ? camp(`${pre}_disc_${i}`) : '', canco = tipusEp === 'pindola' || tipusEp === 'tematic' ? camp(`${pre}_canco_${i}`) : '';
     if (disc) a.disc = disc;
     if (canco) a.canco = canco;                                   // píndola resum: la cançó de cada artista
     return a;
@@ -1766,6 +1772,7 @@ function actualitzaFormat(f) {
   if (musical && tipus === 'sessio' && !f.elements.titol.value.trim()) f.elements.titol.value = SESSIO;
   if (musical && tipus !== 'sessio' && f.elements.titol.value.trim() === SESSIO) f.elements.titol.value = '';
   mostra('.nomes-pindola', musical && tipus === 'pindola');
+  mostra('.nomes-canco', musical && (tipus === 'pindola' || tipus === 'tematic'));   // píndoles i temàtics: una cançó per artista
   mostra('.nomes-tematic', musical && tipus === 'tematic');
   mostra('.no-dialeg', !musical || tipus !== 'dialeg');
   f.querySelectorAll('.art-fila').forEach((el) => { el.hidden = Number(el.dataset.i) >= n; });
