@@ -424,7 +424,19 @@ const fet = (g, k) => Boolean(g.pla?.[k] || (k === 'enviat' && g.pla?.emes));   
 const artDisc = (a) => (a?.artista ? `<b>${esc(a.artista)}</b>${a.disc ? ' · ' + esc(a.disc) : ''}` : '');
 const artCanco = (ll) => (ll || []).filter((a) => a.artista || a.canco).map((a) => `${esc(a.artista || '')}${a.canco ? ` <i>«${esc(a.canco)}»</i>` : ''}`).join(', ');
 const textCanco = (ll) => (ll || []).filter((a) => a.artista || a.canco).map((a) => `${a.artista || ''}${a.canco ? ` «${a.canco}»` : ''}`.trim());
+// Guió per refer: en David ha canviat l'alternatiu (o les cançons) després de fer el guió
+const abansPla = (g) => {
+  const r = g.referGuio;
+  if (!r) return '';
+  const abans = g.tipusEp === 'dialeg' ? artDisc(r.contemporanis?.[0]) || '<i>cap</i>'
+    : [artCanco(r.classics), artCanco(r.contemporanis)].filter(Boolean).join(' · ') || '<i>cap</i>';
+  return `<span class="pla-abans">⚠ Abans: ${abans}</span>`;
+};
 function columnesPla(g) {
+  const [a, b] = columnesPlaBase(g);
+  return [a, b + abansPla(g)];
+}
+function columnesPlaBase(g) {
   if (tipusPla(g) === 'entrevista') return [`<b>${esc(g.titol || 'Convidat per decidir')}</b>${g.descripcio ? ` · <span class="pla-desc">${esc(g.descripcio)}</span>` : ''}`,
     artCanco(g.cancons) || '<span class="pla-buit">cançons per triar</span>'];
   if (g.tipusEp === 'pindola') return [`<b><i>${esc(g.titol || 'Píndola resum')}</i></b> · ${artCanco(g.classics)}`, artCanco(g.contemporanis)];
@@ -449,13 +461,22 @@ const checksPla = (g) => estatsPla(g.programaId).map(([k, nom]) => `<label class
 const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && (k === 'validat' || k === 'canvi'));
 
 /* Canvis d'en David (els marca el servidor) i propostes de diàlegs i temàtics */
-const NOMS_CAMPS = { classics: 'cançons dels clàssics', contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
+const NOMS_CAMPS = { referGuio: 'guió per refer', classics: 'cançons dels clàssics', contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
   presentadors: 'equip', tecnic: 'tècnic', notes: 'notes', checklist: 'checklist', pla: 'caselles', nova: 'sessió nova', esborrada: 'esborrada' };
 const avisosDavid = (pid) => (esDavid() ? [] : state.gravacions.filter((g) => g.david && g.programaId === pid)
   .sort((a, b) => (Number(a.numero) || 1e6) - (Number(b.numero) || 1e6) || ordena(a, b)));
 const propostesPendents = () => state.propostes.filter((x) => (x.estat || 'pendent') === 'pendent');
 const avisPrograma = (pid) => { const n = esDavid() ? 0 : avisosDavid(pid).length + propostesPendents().length; return n ? ` <span class="avis-n" title="Canvis i propostes d'en David">${n}</span>` : ''; };
 const quanDavid = (g) => { const q = g.david?.quan || ''; return q ? `${dataCurta(q.slice(0, 10))} ${q.slice(11, 16)}` : ''; };
+function blocRefer(pid) {
+  if (esDavid()) return '';
+  const ll = episodisPla(pid).filter((g) => g.referGuio);
+  if (!ll.length) return '';
+  return `<div class="pla-avis pla-refer"><div class="pla-avis-cap"><b>⚠ ${ll.length === 1 ? 'Un guió per refer' : ll.length + ' guions per refer'}</b>
+      <span class="hint">En David ha canviat l'alternatiu després de fer el guió. Quan el tornis a fer, marca «Guió».</span></div>
+    ${ll.map((g) => `<button class="pla-avis-l" data-action="ves-pla" data-id="${g.id}">
+      <span>Ep. ${g.numero} · ${esc(g.titol || '')}</span><span class="hint">${abansPla(g).replace(/<[^>]+>/g, '').replace('⚠ ', '')} · ara: ${esc(g.tipusEp === 'dialeg' ? [g.contemporanis?.[0]?.artista, g.contemporanis?.[0]?.disc].filter(Boolean).join(' · ') : textCanco(g.contemporanis).join(', '))}</span></button>`).join('')}</div>`;
+}
 function blocAvisos(pid) {
   const av = avisosDavid(pid);
   if (!av.length) return '';
@@ -554,10 +575,10 @@ function descartaProposta(id) {
 }
 
 const filtresPla = (pid = ui.planProg) => [['tots', 'Tots els episodis'], ['pendents', "Pendents d'emetre"], ['emesos', 'Emesos'],
-  ...(esMusical(pid) ? [['novalidats', 'Diàlegs per validar']] : [['perconfirmar', 'Convidats per confirmar'], ['sensecancons', 'Sense cançons']])];
+  ...(esMusical(pid) ? [['novalidats', 'Diàlegs per validar'], ['refer', 'Guions per refer']] : [['perconfirmar', 'Convidats per confirmar'], ['sensecancons', 'Sense cançons']])];
 const filtraPla = (eps, f) => eps.filter((g) => f === 'tots' || (f === 'pendents' && !fet(g, 'emes')) || (f === 'emesos' && fet(g, 'emes'))
   || (f === 'novalidats' && g.tipusEp === 'dialeg' && !fet(g, 'validat')) || (f === 'perconfirmar' && !fet(g, 'confirmat'))
-  || (f === 'sensecancons' && !fet(g, 'cancons')) || (f === 'david' && g.david));
+  || (f === 'sensecancons' && !fet(g, 'cancons')) || (f === 'refer' && g.referGuio) || (f === 'david' && g.david));
 function renderPlanificacio(m) {
   const p = prog(ui.planProg) || state.programes.find((x) => esMusical(x.id)) || state.programes[0];
   if (!p) { ui.view = 'programes'; return renderProgrames(m); }
@@ -565,7 +586,7 @@ function renderPlanificacio(m) {
   const musical = esMusical(p.id);
   if (!musical && iniciaPlaEntrevista(p.id)) save();
   const eps = episodisPla(p.id);
-  const env = eps.find((g) => !fet(g, kEnvia(p.id))), grav = eps.find((g) => !fet(g, 'gravat')), guio = eps.find((g) => !fet(g, 'guio'));
+  const env = eps.find((g) => !fet(g, kEnvia(p.id))), grav = eps.find((g) => !fet(g, 'gravat')), guio = eps.find((g) => g.referGuio) || eps.find((g) => !fet(g, 'guio'));
   const tauler = [['enviar', "Enviar a l'emissora", env], ['gravar', 'Proper a gravar', grav], ['guio', 'Proper guió', guio]];
   const filtres = [...filtresPla(p.id), ...(musical && !esDavid() ? [['david', 'Canviats per en David']] : [])];
   if (!filtres.some(([v]) => v === ui.filtrePla)) ui.filtrePla = 'tots';
@@ -587,7 +608,7 @@ function renderPlanificacio(m) {
     <div class="legend pla-llegenda">${musical ? ['dialeg', 'pindola', 'tematic'].map((k) => `<span><span class="caixa t-${k}"></span>${TIPUS_PLA[k]}</span>`).join('') : ''}
       <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
       <span class="hint">${esc(p.nom)} · ${eps.length} ${musical ? 'episodis' : 'programes'}</span></div>
-    ${blocAvisos(p.id)}${musical ? blocPropostes() : ''}
+    ${blocRefer(p.id)}${blocAvisos(p.id)}${musical ? blocPropostes() : ''}
     <div id="plaLlista"></div>`;
   plaLlista();
 }
@@ -600,6 +621,7 @@ function plaLlista() {
     .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, g.descripcio, textMusica(g), textCanco(g.cancons).join(' '), g.notes].join(' ')).includes(w)));
   const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
   const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
+    + (g.referGuio ? '<span class="pla-marca refer">⚠ Refer guió</span>' : '')
     + (g.david && !esDavid() ? `<span class="pla-marca david" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David</span>` : '');
   const taula = `<div class="panel pla-taula"><table>
     <thead><tr><th>Núm.</th>${musical ? '<th>Tipus</th>' : ''}<th>Emissió</th><th>${capA}</th><th>${capB}</th>${est.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
@@ -891,7 +913,7 @@ function filaPla(g) {
 const taulerPla = (eps) => {
   const nomEp = (g) => (g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? `Temàtic ${g.tema || ''}`.trim() : g.titol);
   return [["Enviar a l'emissora", kEnvia(), '#FF7A1F', true], ['Proper a gravar', 'gravat', '#1F66C9'], ['Proper guió', 'guio', '#6E4FC0']].map(([nom, k, col, ambData]) => {
-    const g = eps.find((x) => !fet(x, k));
+    const g = (k === 'guio' && eps.find((x) => x.referGuio)) || eps.find((x) => !fet(x, k));
     return { nom, col, g, text: g ? `Ep. ${g.numero}${ambData && g.emissio ? ' · ' + dataNum(g.emissio) : ''} · ${nomEp(g)}` : 'Tot fet' };
   });
 };
@@ -2140,6 +2162,7 @@ $('#main').addEventListener('change', (e) => {
     if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat, Enviat i Emès només els marca l'Angel."); return; }
     if (g) {
       g.pla = { ...(g.pla || {}), [t.dataset.k]: t.checked };
+      if (t.dataset.k === 'guio' && t.checked) delete g.referGuio;     // guió refet
       // L'estat de la gravació segueix les caselles: Confirmat → Gravat → Editat → Emès (publicat)
       const k = t.dataset.k, ESTAT_DE = { confirmat: 'confirmat', gravat: 'gravat', editat: 'editat', emes: 'publicat' };
       const ORDRE = ['pendent', 'confirmat', 'gravat', 'editat', 'publicat'], ara = ORDRE.indexOf(g.estat);

@@ -742,3 +742,10 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .pcel.si.pc-enviat { background: var(--pc-enviat); }
 .pcel.no.pc-enviat { background: color-mix(in srgb, var(--pc-pendent) 70%, transparent); }
 .pc-enviat:has(input:checked) { background: var(--pc-enviat); color: #0E0E0E; }
+
+/* ---------- Guió per refer ---------- */
+:root { --pla-refer: #E03131; }
+.pla-marca.refer { background: var(--pla-refer); text-transform: none; }
+.pla-refer { border-color: var(--pla-refer); }
+.pla-abans { display: block; margin-top: 2px; font-size: 12px; color: var(--pla-refer); }
+.pla-abans b { font-weight: 600; text-decoration: line-through; }
