@@ -463,7 +463,8 @@ const potMarcar = (g, k) => !esDavid() || (!fet(g, 'emes') && (k === 'validat' |
 /* Canvis d'en David (els marca el servidor) i propostes de diàlegs i temàtics */
 const NOMS_CAMPS = { referGuio: 'guió per refer', classics: 'cançons dels clàssics', contemporanis: 'alternatiu', titol: 'títol', data: 'data de gravació', hora: 'hora', durada: 'durada', estudi: 'estudi', estat: 'estat',
   presentadors: 'equip', tecnic: 'tècnic', notes: 'notes', checklist: 'checklist', pla: 'caselles', nova: 'sessió nova', esborrada: 'esborrada' };
-const avisosDavid = (pid) => (esDavid() ? [] : state.gravacions.filter((g) => g.david && g.programaId === pid)
+// Avisos pendents de veure. «Vist» no esborra la marca: el filtre «Canviats per en David» els continua mostrant tots
+const avisosDavid = (pid) => (esDavid() ? [] : state.gravacions.filter((g) => g.david && !g.david.vist && g.programaId === pid)
   .sort((a, b) => (Number(a.numero) || 1e6) - (Number(b.numero) || 1e6) || ordena(a, b)));
 const propostesPendents = () => state.propostes.filter((x) => (x.estat || 'pendent') === 'pendent');
 const avisPrograma = (pid) => { const n = esDavid() ? 0 : avisosDavid(pid).length + propostesPendents().length; return n ? ` <span class="avis-n" title="Canvis i propostes d'en David">${n}</span>` : ''; };
@@ -488,7 +489,7 @@ function blocAvisos(pid) {
     ${av.length > 12 ? `<span class="hint">… i ${av.length - 12} més: tria «Canviats per en David» al filtre.</span>` : ''}</div>`;
 }
 function avisosVistos() {
-  avisosDavid(ui.planProg).forEach((g) => { delete g.david; });
+  avisosDavid(ui.planProg).forEach((g) => { g.david = { ...g.david, vist: true }; });
   save(); render(); toast('Canvis marcats com a vistos.');
 }
 const ESTAT_PROP = { pendent: 'Pendent', acceptada: 'Acceptada', descartada: 'Descartada' };
@@ -622,7 +623,7 @@ function plaLlista() {
   const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
   const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
     + (g.referGuio ? '<span class="pla-marca refer">⚠ Refer guió</span>' : '')
-    + (g.david && !esDavid() ? `<span class="pla-marca david" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David</span>` : '');
+    + (g.david && !esDavid() ? `<span class="pla-marca david ${g.david.vist ? 'vist' : ''}" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David${g.david.vist ? ' · ' + esc(quanDavid(g)) : ''}</span>` : '');
   const taula = `<div class="panel pla-taula"><table>
     <thead><tr><th>Núm.</th>${musical ? '<th>Tipus</th>' : ''}<th>Emissió</th><th>${capA}</th><th>${capB}</th>${est.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
     <tbody>${rows.map((g) => { const [a, b] = columnesPla(g); return `<tr id="pla-${g.id}" class="t-${tipusPla(g)} ${marca(g)}">

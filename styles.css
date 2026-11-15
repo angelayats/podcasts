@@ -749,3 +749,4 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .pla-refer { border-color: var(--pla-refer); }
 .pla-abans { display: block; margin-top: 2px; font-size: 12px; color: var(--pla-refer); }
 .pla-abans b { font-weight: 600; text-decoration: line-through; }
+.pla-marca.david.vist { background: transparent; color: var(--pla-david); border: 1px solid var(--pla-david); }
