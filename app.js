@@ -1882,13 +1882,17 @@ const netejaTitol = (t) => String(t || '').replace(/\s*[([][^)\]]*remaster[^)\]]
 // A l'ordinador i a Android es pregunta directament a Apple. A l'iPhone Apple redirigeix la cerca a l'app Música
 // i falla: llavors es fa a través de la funció «musica» de Supabase, que cerca des del servidor.
 let cercaPerServidor = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-async function cercaApple(q) {
-  const servidor = () => fetch(`${window.PODCASTS_CONFIG.supabaseUrl}/functions/v1/musica?term=${encodeURIComponent(q)}`).then((x) => { if (!x.ok) throw new Error(x.status); return x.json(); });
+async function cercaApple(q, { entitat = 'song', atribut = '', limit = 10 } = {}) {
+  const params = `term=${encodeURIComponent(q)}&entity=${entitat}${atribut ? '&attribute=' + atribut : ''}&limit=${limit}`;
+  const servidor = () => fetch(`${window.PODCASTS_CONFIG.supabaseUrl}/functions/v1/musica?${params}`).then((x) => { if (!x.ok) throw new Error(x.status); return x.json(); });
   if (cercaPerServidor) return servidor();
   try {
-    return await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&country=es&limit=8`).then((x) => x.json());
+    return await fetch(`https://itunes.apple.com/search?${params}&media=music&country=es`).then((x) => x.json());
   } catch (e) { cercaPerServidor = true; return servidor(); }
 }
+// Cada fila té artista i cançó. Pas 1: escrivint l'artista surten artistes; en triar-ne un, surten les seves cançons.
+// Pas 2: a la casella de la cançó es pot escriure per filtrar. La llista es pot desplaçar: només tria quan es toca (no en lliscar).
+// El botó × buida la fila.
 function activaCercaMusica(f) {
   f.querySelectorAll('input[name*="_canco_"]').forEach((inp) => {
     const [pre, , i] = inp.name.split('_');
@@ -1897,42 +1901,73 @@ function activaCercaMusica(f) {
     fila.classList.add('amb-cerca');
     const llista = Object.assign(document.createElement('div'), { className: 'cerca-musica', hidden: true });
     const escolta = Object.assign(document.createElement('a'), { className: 'cv-escolta', target: '_blank', rel: 'noopener', textContent: '▶ Escolta', title: 'Obre la cançó a Apple Music' });
+    const buida = Object.assign(document.createElement('button'), { type: 'button', className: 'cv-buida', textContent: '×', title: 'Buida aquesta fila' });
+    buida.setAttribute('aria-label', 'Buida aquesta fila');
+    inp.after(buida);
     fila.append(llista, escolta);
-    const mostraEscolta = () => { escolta.hidden = !url.value; if (url.value) escolta.href = url.value; };
+    const visible = () => inp.offsetParent !== null;            // als diàlegs la cançó no hi és
+    const mostraEscolta = () => { escolta.hidden = !url.value; if (url.value) escolta.href = url.value; buida.hidden = !visible() || !(art.value || inp.value) || (art.readOnly && !inp.value); };
     mostraEscolta();
     let temps = null, darrera = 0;
-    const cerca = async () => {
-      const q = `${art.value} ${inp.value}`.trim();
-      if (q.length < 2) { llista.hidden = true; return; }
+    const mostra = (html, tria) => {
+      llista.innerHTML = html; llista.hidden = false; llista.scrollTop = 0;
+      llista.querySelectorAll('button').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); tria(Number(b.dataset.j)); }));
+    };
+    const pregunta = async (q, opcions) => {
       const n = ++darrera;
       llista.innerHTML = '<span class="hint">Cercant…</span>'; llista.hidden = false;
-      try {
-        const r = await cercaApple(q);
-        if (n !== darrera) return;
-        const vist = new Set();
-        const res = (r.results || []).filter((x) => { const k = clauCerca(netejaTitol(x.trackName) + x.artistName); if (vist.has(k)) return false; vist.add(k); return true; });
-        llista.innerHTML = res.length ? res.map((x, j) => `<button type="button" data-j="${j}">
-            ${x.artworkUrl60 ? `<img src="${esc(x.artworkUrl60)}" alt="" loading="lazy">` : ''}
-            <span><b>${esc(netejaTitol(x.trackName))}</b><span>${esc(x.artistName)}${x.collectionName ? ' · ' + esc(x.collectionName) : ''}${x.releaseDate ? ' · ' + x.releaseDate.slice(0, 4) : ''}</span></span></button>`).join('')
-          : '<span class="hint">No he trobat cap cançó. Prova amb l\'artista al costat.</span>';
-        // Al iPhone el toc arriba com a «pointerdown» i després «click»: qualsevol dels dos tria la cançó
-        const tria = (b, e) => {
-          e.preventDefault();
-          const x = res[Number(b.dataset.j)];
-          if (!art.readOnly) art.value = x.artistName;
-          inp.value = netejaTitol(x.trackName); url.value = x.trackViewUrl || '';
-          llista.hidden = true; mostraEscolta();
-          f.dispatchEvent(new Event('input'));
-        };
-        llista.querySelectorAll('button').forEach((b) => { b.addEventListener('pointerdown', (e) => tria(b, e)); b.addEventListener('click', (e) => tria(b, e)); });
-      } catch (e) { if (n === darrera) llista.innerHTML = '<span class="hint">No s\'ha pogut cercar. Comprova la connexió.</span>'; }
+      try { const r = await cercaApple(q, opcions); return n === darrera ? (r.results || []) : null; }
+      catch (e) { if (n === darrera) llista.innerHTML = '<span class="hint">No s\'ha pogut cercar. Comprova la connexió.</span>'; return null; }
     };
-    inp.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 400); });
-    inp.addEventListener('focus', () => { if (inp.value.trim().length >= 2 && !url.value) cerca(); });
-    inp.addEventListener('blur', () => setTimeout(() => { llista.hidden = true; }, 400));
-    // També es pot cercar escrivint l'artista: surten les seves cançons
-    if (!art.readOnly) art.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cerca, 500); });
-    art.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== inp) llista.hidden = true; }, 400));
+    // Pas 1: artistes
+    const cercaArtistes = async () => {
+      if (!visible() || art.value.trim().length < 2) { llista.hidden = true; return; }
+      const res = await pregunta(art.value.trim(), { entitat: 'musicArtist', atribut: 'artistTerm', limit: 8 });
+      if (!res) return;
+      if (!res.length) { llista.innerHTML = '<span class="hint">No he trobat cap artista amb aquest nom.</span>'; return; }
+      mostra(`<span class="hint">Tria l'artista:</span>` + res.map((x, j) => `<button type="button" data-j="${j}"><span class="cm-ico">🎤</span>
+        <span><b>${esc(x.artistName)}</b><span>${esc(x.primaryGenreName || '')}</span></span></button>`).join(''), (j) => {
+        const x = res[j];
+        art.value = x.artistName; art.dataset.id = x.artistId || ''; inp.value = ''; url.value = '';
+        mostraEscolta(); f.dispatchEvent(new Event('input'));
+        cercaCancons();
+      });
+    };
+    // Pas 2: cançons (de l'artista triat, o del que hi hagi escrit)
+    const cercaCancons = async () => {
+      if (!visible()) return;
+      const q = `${art.value} ${inp.value}`.trim();
+      if (q.length < 2) { llista.hidden = true; return; }
+      let res = await pregunta(q, art.value && !inp.value ? { entitat: 'song', atribut: 'artistTerm', limit: 25 } : { entitat: 'song', limit: 15 });
+      if (!res) return;
+      const id = Number(art.dataset.id) || 0;
+      if (id && res.some((x) => x.artistId === id)) res = res.filter((x) => x.artistId === id);
+      const vist = new Set();
+      res = res.filter((x) => { const k = clauCerca(netejaTitol(x.trackName) + x.artistName); if (vist.has(k)) return false; vist.add(k); return true; });
+      if (!res.length) { llista.innerHTML = '<span class="hint">No he trobat cap cançó. Prova amb una altra paraula.</span>'; return; }
+      mostra(`<span class="hint">${art.value && !inp.value ? `Cançons de ${esc(art.value)} (escriu per filtrar):` : 'Tria la cançó:'}</span>` + res.map((x, j) => `<button type="button" data-j="${j}">
+          ${x.artworkUrl60 ? `<img src="${esc(x.artworkUrl60)}" alt="" loading="lazy">` : ''}
+          <span><b>${esc(netejaTitol(x.trackName))}</b><span>${esc(x.artistName)}${x.collectionName ? ' · ' + esc(x.collectionName) : ''}${x.releaseDate ? ' · ' + x.releaseDate.slice(0, 4) : ''}</span></span></button>`).join(''), (j) => {
+        const x = res[j];
+        if (!art.readOnly) { art.value = x.artistName; art.dataset.id = x.artistId || ''; }
+        inp.value = netejaTitol(x.trackName); url.value = x.trackViewUrl || '';
+        llista.hidden = true; mostraEscolta(); f.dispatchEvent(new Event('input'));
+      });
+    };
+    const amaga = () => setTimeout(() => { if (document.activeElement !== inp && document.activeElement !== art) llista.hidden = true; }, 400);
+    inp.addEventListener('input', () => { url.value = ''; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cercaCancons, 400); });
+    inp.addEventListener('focus', () => { if (!url.value && (art.value || inp.value.trim().length >= 2)) cercaCancons(); });
+    inp.addEventListener('blur', amaga);
+    if (!art.readOnly) {
+      art.addEventListener('input', () => { url.value = ''; delete art.dataset.id; mostraEscolta(); clearTimeout(temps); temps = setTimeout(cercaArtistes, 450); });
+      art.addEventListener('blur', amaga);
+    }
+    buida.addEventListener('click', () => {
+      if (!art.readOnly) { art.value = ''; delete art.dataset.id; }
+      inp.value = ''; url.value = ''; llista.hidden = true; mostraEscolta();
+      f.dispatchEvent(new Event('input'));
+      (art.readOnly ? inp : art).focus();
+    });
   });
 }
 // Perfil d'en David: bloqueja el que no pot canviar i ho explica a dalt del formulari
