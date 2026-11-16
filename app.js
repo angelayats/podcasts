@@ -1706,6 +1706,8 @@ function openGravacio(g, dataPerDefecte) {
       </div>
       <button type="button" class="btn small nomes-pindola" data-dlg="omple-pindola">↺ Omple els clàssics amb els dels 4 diàlegs anteriors</button>
       <span class="hint" id="previaTitol"></span>
+      <div class="chatgpt-fila nomes-angel"><button type="button" class="btn small" data-dlg="chatgpt">📝 Prepara-ho a ChatGPT</button>
+        <span class="hint">Copia l'episodi (tipus, artistes, discos i cançons) i obre el projecte de Blanc &amp; Negre: només cal enganxar.</span></div>
     </fieldset>
     <fieldset><legend>Gravació</legend>
       <div class="row">
@@ -2014,6 +2016,32 @@ function bloquejaDavid(f, g, nou) {
    el copia i obre el projecte de ChatGPT del programa. L'enllaç del projecte es guarda a Ajustos. */
 const CHATGPT_PROJECTES = [['lluna', 'La cara oculta de la lluna'], ['bn', 'Blanc & Negre']];
 const enllacChatGPT = (k) => state.plantilles?.chatgpt?.[k] || '';
+function missatgeBN(f) {
+  const v = (n) => String(f.elements[n]?.value || '').trim();
+  const tipus = v('tipusEp'), em = v('emissio');
+  const dia = em ? `${DIES_LLARGS[(parseYmd(em).getDay() + 6) % 7]} ${dataNum(em)}` : 'per decidir';
+  const fila = (pre, i, ambDisc) => {
+    const a = v(`${pre}_art_${i}`), c = v(`${pre}_canco_${i}`), d = v(`${pre}_disc_${i}`), u = v(`${pre}_url_${i}`);
+    if (!a && !c) return '';
+    return `${a || '(artista per decidir)'}${ambDisc ? (d ? ` — ${d}` : '') : (c ? ` — «${c}»` : '')}${u && !ambDisc ? ' · ' + u : ''}`;
+  };
+  const cap = `BLANC & NEGRE · Episodi ${v('numero') || '—'} · ${{ dialeg: 'DIÀLEG', pindola: 'PÍNDOLA RESUM', tematic: 'TEMÀTIC' }[tipus]} · Emissió ${dia}`;
+  let cos = [];
+  if (tipus === 'dialeg') {
+    cos = [`Clàssic: ${fila('c', 0, true) || '(per decidir)'}`, `Contemporani: ${fila('k', 0, true) || '(per decidir)'}`];
+  } else if (tipus === 'pindola') {
+    cos = [`Títol: ${v('titol') || 'Píndola resum'}`, 'Les quatre parelles (clàssic ↔ veu del present):',
+      ...[0, 1, 2, 3].map((i) => `${i + 1}. ${fila('c', i) || '(clàssic per decidir)'}  ↔  ${fila('k', i) || '(contemporani per decidir)'}`),
+      'Si falta la cançó d’algun clàssic, tria la més representativa.'];
+  } else {
+    const cl = [0, 1, 2, 3, 4].map((i) => fila('c', i)).filter(Boolean), ct = [0, 1, 2, 3, 4].map((i) => fila('k', i)).filter(Boolean);
+    cos = [`Tema: ${v('tema') || '(per decidir)'}`, 'Clàssics:', ...(cl.length ? cl.map((x, i) => `${i + 1}. ${x}`) : ['(per decidir)']),
+      'Veus del present:', ...(ct.length ? ct.map((x, i) => `${i + 6}. ${x}`) : ['(per decidir)'])];
+  }
+  if (cos.some((x) => /per decidir/.test(x))) cos.push("Hi ha artistes o cançons per decidir: proposa-me'n abans de fer el guió i espera que els triï.");
+  return [cap, ...cos, ...(v('notes') ? [`Notes: ${v('notes')}`] : []), '',
+    'Fes el guió seguint les instruccions del projecte per a aquest tipus d’episodi, damunt la seva plantilla.'].join('\n');
+}
 function missatgeChatGPT(f, g) {
   const v = (n) => String(f.elements[n]?.value || '').trim();
   const p = prog(v('programaId'));
@@ -2046,8 +2074,10 @@ function copiaAra(text) {
 }
 function enviaChatGPT(f, g) {
   if (esDavid()) return;                              // els guions amb ChatGPT només els fa l'Angel
-  const text = missatgeChatGPT(f, g);
-  const url = enllacChatGPT('lluna') || 'https://chatgpt.com/';
+  const musical = esMusical(f.elements.programaId?.value);
+  if (musical && !NUMERATS.includes(f.elements.tipusEp?.value)) return toast('Tria el tipus d’episodi: diàleg, píndola o temàtic.');
+  const text = musical ? missatgeBN(f) : missatgeChatGPT(f, g);
+  const url = enllacChatGPT(musical ? 'bn' : 'lluna') || 'https://chatgpt.com/';
   const ok = copiaAra(text);                          // primer copiar…
   const finestra = window.open(url, '_blank');        // …i després obrir ChatGPT
   if (!finestra) location.href = url;
