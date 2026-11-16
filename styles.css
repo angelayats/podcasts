@@ -759,3 +759,4 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .cv-buida { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0; }
 .cv-buida[hidden] { visibility: hidden; display: inline-block !important; }
 .art-fila .cv-buida { align-self: flex-end; margin-top: -2px; }
+.chatgpt-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 10px; }

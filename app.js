@@ -1589,6 +1589,14 @@ function renderConfig(m) {
           <button class="btn" data-action="copia-cal" data-url="${esc(cal)}">Copia l'enllaç</button>
         </div></div>` : '';
     })()}
+    <div class="section nomes-angel">
+      <h2>ChatGPT</h2>
+      <p class="help">Enllaç de cada projecte de ChatGPT. El botó «📝 Prepara-ho a ChatGPT» de cada programa l'obre directament. Per trobar-lo: a chatgpt.com, obre la pàgina del projecte i copia l'adreça de dalt (comença per https://chatgpt.com/g/…).</p>
+      <form id="formChatGPT" class="ubicacions">
+        ${CHATGPT_PROJECTES.map(([k, nom]) => `<label>${esc(nom)} <input name="${k}" type="url" value="${esc(enllacChatGPT(k))}" placeholder="https://chatgpt.com/g/…" autocomplete="off"></label>`).join('')}
+        <button class="btn">Desa els enllaços</button>
+      </form>
+    </div>
     <div class="section">
       <h2>Instal·lar l'app</h2>
       <p class="hint" id="versioApp"></p>
@@ -1610,6 +1618,14 @@ function renderConfig(m) {
     if (!v) return;
     if (state.estudis.includes(v)) { toast('Aquest estudi ja existeix.'); return; }
     state.estudis.push(v); save(); render();
+  });
+  $('#formChatGPT')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target), chatgpt = {};
+    CHATGPT_PROJECTES.forEach(([k]) => { const v = String(fd.get(k) || '').trim(); if (v) chatgpt[k] = v; });
+    if (Object.values(chatgpt).some((v) => !/^https:\/\/(chatgpt\.com|chat\.openai\.com)\//.test(v))) { toast('Els enllaços han de començar per https://chatgpt.com/'); return; }
+    state.plantilles = { ...(state.plantilles || {}), chatgpt };
+    save(); toast('Enllaços desats.');
   });
   $('#formUbic')?.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -1675,6 +1691,8 @@ function openGravacio(g, dataPerDefecte) {
       ${[0, 1, 2, 3].map((i) => `<div class="cv-fila"><input name="cv_art_${i}" value="${esc(g.cancons?.[i]?.artista || '')}" placeholder="Artista ${i + 1}" autocomplete="off">
         <input name="cv_canco_${i}" value="${esc(g.cancons?.[i]?.canco || '')}" placeholder="Cançó (escriu i tria)" autocomplete="off">
         <input type="hidden" name="cv_url_${i}" value="${esc(g.cancons?.[i]?.url || '')}"></div>`).join('')}
+      <div class="chatgpt-fila"><button type="button" class="btn small" data-dlg="chatgpt">📝 Prepara-ho a ChatGPT</button>
+        <span class="hint">Copia el convidat i les cançons i obre el projecte de ChatGPT: només cal enganxar.</span></div>
     </fieldset>
     <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
       <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || (g.numero || g.classics?.length ? 'dialeg' : 'sessio')) === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
@@ -1829,6 +1847,7 @@ function openGravacio(g, dataPerDefecte) {
       toast(fora.size > 1 ? `S'han eliminat ${fora.size} sessions.` : 'Gravació eliminada.');
     },
     onExtra(action) {
+      if (action === 'chatgpt') return enviaChatGPT($('#dlgForm'), g);
       if (action === 'omple-pindola') omplePindola($('#dlgForm'), g);
       if (action === 'copia') {
         const f = $('#dlgForm').elements;
@@ -1988,6 +2007,47 @@ function bloquejaDavid(f, g, nou) {
   f.querySelector('[data-dlg="omple-pindola"]')?.remove();
   avis(g.tipusEp === 'dialeg' ? "Pots canviar l'alternatiu (artista i disc) i el dia i l'hora de gravació. La resta només la canvia l'Angel."
     : "Pots posar els artistes alternatius i les cançons de tots els artistes, i el dia i l'hora de gravació. Els artistes clàssics i el tema només els canvia l'Angel.");
+}
+
+/* ---------- ChatGPT: biografia i guió ----------
+   Prepara el missatge amb les dades del programa (tal com estan al formulari, encara que no s'hagin desat),
+   el copia i obre el projecte de ChatGPT del programa. L'enllaç del projecte es guarda a Ajustos. */
+const CHATGPT_PROJECTES = [['lluna', 'La cara oculta de la lluna'], ['bn', 'Blanc & Negre']];
+const enllacChatGPT = (k) => state.plantilles?.chatgpt?.[k] || '';
+function missatgeChatGPT(f, g) {
+  const v = (n) => String(f.elements[n]?.value || '').trim();
+  const p = prog(v('programaId'));
+  const em = v('emissio');
+  const dia = em ? `${DIES_LLARGS[(parseYmd(em).getDay() + 6) % 7]} ${dataNum(em)}` : 'per decidir';
+  const cancons = [0, 1, 2, 3].map((i) => ({ a: v(`cv_art_${i}`), c: v(`cv_canco_${i}`), u: v(`cv_url_${i}`) })).filter((x) => x.a || x.c);
+  return [
+    `${(p?.nom || 'La cara oculta de la lluna').toUpperCase()} · Programa ${v('numero') || '—'} · Emissió ${dia}`,
+    `Convidat: ${v('titol') || '—'}`,
+    `Qui és: ${v('descripcio') || '(per completar)'}`,
+    'Cançons:',
+    ...(cancons.length ? cancons.map((x, i) => `${i + 1}. ${x.c || '(cançó per decidir)'} — ${x.a || '(artista per decidir)'}${x.u ? ' · ' + x.u : ''}`) : ['(encara no les tenim)']),
+    ...(v('notes') ? [`Notes: ${v('notes')}`] : []),
+    '',
+    'Fes primer la recerca biogràfica seguint les instruccions del projecte. Quan te la validi, et demanaré el guió.',
+  ].join('\n');
+}
+async function copiaText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) {
+    const t = Object.assign(document.createElement('textarea'), { value: text });
+    t.style.position = 'fixed'; t.style.opacity = '0'; document.body.append(t); t.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { /* res */ }
+    t.remove(); return ok;
+  }
+}
+async function enviaChatGPT(f, g) {
+  const text = missatgeChatGPT(f, g);
+  const url = enllacChatGPT('lluna');
+  const finestra = window.open(url || 'https://chatgpt.com/', '_blank');      // s'obre de seguida (el mòbil no deixa obrir-la més tard)
+  const ok = await copiaText(text);
+  if (!finestra) location.href = url || 'https://chatgpt.com/';
+  toast(ok ? (url ? 'Missatge copiat. A ChatGPT, comença un xat nou al projecte i enganxa.' : "Missatge copiat. Posa l'enllaç del projecte a Ajustos perquè s'obri directament.")
+    : "No s'ha pogut copiar el missatge.");
 }
 
 /* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
