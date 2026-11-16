@@ -1691,7 +1691,7 @@ function openGravacio(g, dataPerDefecte) {
       ${[0, 1, 2, 3].map((i) => `<div class="cv-fila"><input name="cv_art_${i}" value="${esc(g.cancons?.[i]?.artista || '')}" placeholder="Artista ${i + 1}" autocomplete="off">
         <input name="cv_canco_${i}" value="${esc(g.cancons?.[i]?.canco || '')}" placeholder="Cançó (escriu i tria)" autocomplete="off">
         <input type="hidden" name="cv_url_${i}" value="${esc(g.cancons?.[i]?.url || '')}"></div>`).join('')}
-      <div class="chatgpt-fila"><button type="button" class="btn small" data-dlg="chatgpt">📝 Prepara-ho a ChatGPT</button>
+      <div class="chatgpt-fila nomes-angel"><button type="button" class="btn small" data-dlg="chatgpt">📝 Prepara-ho a ChatGPT</button>
         <span class="hint">Copia el convidat i les cançons i obre el projecte de ChatGPT: només cal enganxar.</span></div>
     </fieldset>
     <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
@@ -2045,6 +2045,7 @@ function copiaAra(text) {
   return ok;
 }
 function enviaChatGPT(f, g) {
+  if (esDavid()) return;                              // els guions amb ChatGPT només els fa l'Angel
   const text = missatgeChatGPT(f, g);
   const url = enllacChatGPT('lluna') || 'https://chatgpt.com/';
   const ok = copiaAra(text);                          // primer copiar…
