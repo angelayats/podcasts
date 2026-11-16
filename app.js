@@ -2031,23 +2031,26 @@ function missatgeChatGPT(f, g) {
     'Fes primer la recerca biogràfica seguint les instruccions del projecte. Quan te la validi, et demanaré el guió.',
   ].join('\n');
 }
-async function copiaText(text) {
-  try { await navigator.clipboard.writeText(text); return true; }
-  catch (e) {
-    const t = Object.assign(document.createElement('textarea'), { value: text });
-    t.style.position = 'fixed'; t.style.opacity = '0'; document.body.append(t); t.select();
-    let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { /* res */ }
-    t.remove(); return ok;
-  }
+// Copia al moment (dins el mateix toc): a l'iPhone, si primer s'obre ChatGPT, l'app ja no pot copiar
+function copiaAra(text) {
+  const t = Object.assign(document.createElement('textarea'), { value: text, readOnly: false });
+  t.setAttribute('contenteditable', 'true');
+  Object.assign(t.style, { position: 'fixed', top: '0', left: '0', opacity: '0', fontSize: '16px' });   // 16px: l'iPhone no fa zoom
+  const dlg = $('#dlg');
+  (dlg?.open ? dlg : document.body).append(t);        // amb el formulari obert, fora del diàleg tot és inactiu
+  t.focus(); t.select(); t.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { /* res */ }
+  t.remove();
+  try { navigator.clipboard?.writeText(text).catch(() => {}); ok = ok || Boolean(navigator.clipboard); } catch (e) { /* res */ }
+  return ok;
 }
-async function enviaChatGPT(f, g) {
+function enviaChatGPT(f, g) {
   const text = missatgeChatGPT(f, g);
-  const url = enllacChatGPT('lluna');
-  const finestra = window.open(url || 'https://chatgpt.com/', '_blank');      // s'obre de seguida (el mòbil no deixa obrir-la més tard)
-  const ok = await copiaText(text);
-  if (!finestra) location.href = url || 'https://chatgpt.com/';
-  toast(ok ? (url ? 'Missatge copiat. A ChatGPT, comença un xat nou al projecte i enganxa.' : "Missatge copiat. Posa l'enllaç del projecte a Ajustos perquè s'obri directament.")
-    : "No s'ha pogut copiar el missatge.");
+  const url = enllacChatGPT('lluna') || 'https://chatgpt.com/';
+  const ok = copiaAra(text);                          // primer copiar…
+  const finestra = window.open(url, '_blank');        // …i després obrir ChatGPT
+  if (!finestra) location.href = url;
+  toast(ok ? 'Missatge copiat. A ChatGPT, mantén el dit (o Ctrl+V) a la casella i enganxa.' : "No s'ha pogut copiar el missatge.");
 }
 
 /* ---------- Formulari d'episodi musical (Blanc & Negre) ---------- */
