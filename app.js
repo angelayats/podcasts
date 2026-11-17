@@ -2039,7 +2039,13 @@ function missatgeBN(f) {
       'Veus del present:', ...(ct.length ? ct.map((x, i) => `${i + 6}. ${x}`) : ['(per decidir)'])];
   }
   if (cos.some((x) => /per decidir/.test(x))) cos.push("Hi ha artistes o cançons per decidir: proposa-me'n abans de fer el guió i espera que els triï.");
-  return [cap, ...cos, ...(v('notes') ? [`Notes: ${v('notes')}`] : []), '',
+  // Primera línia = nom que volem per al xat (ChatGPT el treu d'aquí)
+  const art = (pre) => v(`${pre}_art_0`);
+  const quin = tipus === 'dialeg' ? [art('c'), art('k')].filter(Boolean).join(' – ')
+    : tipus === 'tematic' ? v('tema')
+    : (v('titol') && !/^p[ií]ndola resum$/i.test(v('titol')) ? v('titol') : [0, 1, 2, 3].map((i) => v(`c_art_${i}`)).filter(Boolean).join(', '));
+  const nomXat = [v('numero') || '—', { dialeg: 'Diàleg', pindola: 'Píndola', tematic: 'Temàtic' }[tipus], quin].filter(Boolean).join(' · ');
+  return [nomXat, '', cap, ...cos, ...(v('notes') ? [`Notes: ${v('notes')}`] : []), '',
     'Fes el guió seguint les instruccions del projecte per a aquest tipus d’episodi, damunt la seva plantilla.'].join('\n');
 }
 function missatgeChatGPT(f, g) {
@@ -2049,6 +2055,8 @@ function missatgeChatGPT(f, g) {
   const dia = em ? `${DIES_LLARGS[(parseYmd(em).getDay() + 6) % 7]} ${dataNum(em)}` : 'per decidir';
   const cancons = [0, 1, 2, 3].map((i) => ({ a: v(`cv_art_${i}`), c: v(`cv_canco_${i}`), u: v(`cv_url_${i}`) })).filter((x) => x.a || x.c);
   return [
+    [v('numero') || '—', v('titol')].filter(Boolean).join(' · '),   // nom del xat
+    '',
     `${(p?.nom || 'La cara oculta de la lluna').toUpperCase()} · Programa ${v('numero') || '—'} · Emissió ${dia}`,
     `Convidat: ${v('titol') || '—'}`,
     `Qui és: ${v('descripcio') || '(per completar)'}`,
