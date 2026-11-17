@@ -2077,8 +2077,39 @@ function copiaAra(text) {
   t.focus(); t.select(); t.setSelectionRange(0, text.length);
   let ok = false; try { ok = document.execCommand('copy'); } catch (e) { /* res */ }
   t.remove();
-  try { navigator.clipboard?.writeText(text).catch(() => {}); ok = ok || Boolean(navigator.clipboard); } catch (e) { /* res */ }
-  return ok;
+  try { navigator.clipboard?.writeText(text).catch(() => {}); } catch (e) { /* res */ }
+  return ok;                                          // només és segur si la còpia directa ha funcionat
+}
+// Si el mòbil no ha pogut copiar: mostra el text i un botó per copiar-lo i obrir ChatGPT
+function mostraPerCopiar(text, url) {
+  const d = document.createElement('dialog');
+  d.className = 'copia-dlg';
+  d.innerHTML = `<h3>Copia el missatge</h3>
+    <p class="hint">El mòbil no l'ha pogut copiar sol. Comprova que la primera línia és la de l'episodi i toca «Copia i obre ChatGPT».</p>
+    <textarea rows="9"></textarea>
+    <div class="copia-botons"><button type="button" class="btn" data-a="tanca">Tanca</button>
+      <button type="button" class="btn primary" data-a="copia">Copia i obre ChatGPT</button></div>`;
+  const ta = d.querySelector('textarea');
+  ta.value = text;
+  ta.style.fontSize = '16px';                         // l'iPhone no fa zoom
+  const tanca = () => { d.close(); d.remove(); };
+  const obre = () => { tanca(); const w = window.open(url, '_blank'); if (!w) location.href = url; };
+  d.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'tanca') tanca();
+    if (a === 'obre') obre();
+    if (a !== 'copia') return;
+    ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+    let ok = false; try { ok = document.execCommand('copy'); } catch (err) { /* res */ }
+    try { navigator.clipboard?.writeText(ta.value).catch(() => {}); } catch (err) { /* res */ }
+    if (ok) { obre(); toast('Missatge copiat. A ChatGPT, mantén el dit a la casella i enganxa.'); return; }
+    e.target.textContent = 'Obre ChatGPT';
+    e.target.dataset.a = 'obre';
+    toast("Mantén el dit sobre el text, tria «Seleccionar-ho tot» i «Copiar». Després toca «Obre ChatGPT».");
+  });
+  d.addEventListener('cancel', (e) => { e.preventDefault(); tanca(); });
+  document.body.append(d);
+  d.showModal();
 }
 function enviaChatGPT(f, g) {
   if (esDavid()) return;                              // els guions amb ChatGPT només els fa l'Angel
@@ -2087,6 +2118,7 @@ function enviaChatGPT(f, g) {
   const text = musical ? missatgeBN(f) : missatgeChatGPT(f, g);
   const url = enllacChatGPT(musical ? 'bn' : 'lluna') || 'https://chatgpt.com/';
   const ok = copiaAra(text);                          // primer copiar…
+  if (!ok) return mostraPerCopiar(text, url);         // no s'ha pogut: no obris ChatGPT amb un text vell al porta-retalls
   const finestra = window.open(url, '_blank');        // …i després obrir ChatGPT
   if (!finestra) location.href = url;
   toast(ok ? 'Missatge copiat. A ChatGPT, mantén el dit (o Ctrl+V) a la casella i enganxa.' : "No s'ha pogut copiar el missatge.");
