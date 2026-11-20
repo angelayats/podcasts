@@ -113,7 +113,7 @@ const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format 
 const esDavid = () => { try { return localStorage.getItem('podcasts-perfil') === 'david'; } catch (e) { return false; } };
 const bnId = () => state.programes.find((p) => /blanc/i.test(p.nom))?.id || '';
 const NUMERATS = ['dialeg', 'pindola', 'tematic'];
-const NOMES_ANGEL = new Set(['invita-potencial', 'correu-emissora', 'nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
+const NOMES_ANGEL = new Set(['invita-ep', 'invita-potencial', 'correu-emissora', 'nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
 // Quants artistes de cada costat té cada tipus d'episodi musical
 const SESSIO = 'Sessió de gravació';
 const TIPUS_EP = { sessio: ['Sessió de gravació (sense episodi concret)', 0], dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
@@ -636,13 +636,19 @@ function plaLlista() {
   const etiqueta = (g) => (g === env ? `<span class="pla-marca enviar ${avisEnviament(g).cls}">${esc(avisEnviament(g).txt)}</span>` : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
     + (g.referGuio ? '<span class="pla-marca refer">⚠ Refer guió</span>' : '')
     + (g.david && !esDavid() ? `<span class="pla-marca david ${g.david.vist ? 'vist' : ''}" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David${g.david.vist ? ' · ' + esc(quanDavid(g)) : ''}</span>` : '');
+  // Entrevistes sense «Confirmat»: botó per enviar la invitació al convidat
+  const invPla = (g) => {
+    if (musical || fet(g, 'confirmat') || !g.titol) return '';
+    const per = state.persones.find((x) => (g.convidatsIds || []).includes(x.id));
+    return `<button class="btn small pla-inv nomes-angel" data-action="invita-ep" data-id="${g.id}">📨 Invitació${per?.invitat ? ` <span>· enviada ${esc(dataCurta(per.invitat))}</span>` : ''}</button>`;
+  };
   const taula = `<div class="panel pla-taula"><table>
     <thead><tr><th>Núm.</th>${musical ? '<th>Tipus</th>' : ''}<th>Emissió</th><th>${capA}</th><th>${capB}</th>${est.map(([, n]) => `<th class="c">${n}</th>`).join('')}<th>Notes</th></tr></thead>
     <tbody>${rows.map((g) => { const [a, b] = columnesPla(g); return `<tr id="pla-${g.id}" class="t-${tipusPla(g)} ${marca(g)}">
       <td class="nowrap"><button class="pla-n" data-action="edita" data-id="${g.id}">${g.numero}</button>${etiqueta(g)}</td>
       ${musical ? `<td>${TIPUS_PLA[g.tipusEp]}</td>` : ''}
       <td class="nowrap">${g.emissio ? dataCurta(g.emissio) : '—'}</td>
-      <td class="pla-obre" data-action="edita" data-id="${g.id}">${a}</td>
+      <td class="pla-obre" data-action="edita" data-id="${g.id}">${a}${invPla(g)}</td>
       <td class="pla-obre" data-action="edita" data-id="${g.id}">${b}</td>
       ${est.map(([k]) => `<td class="c pcel pc-${k} ${fet(g, k) ? 'si' : rosaPla(k, pid) ? 'no' : ''}"><input type="checkbox" data-pla="${g.id}" data-k="${k}" ${fet(g, k) ? 'checked' : ''} ${potMarcar(g, k) ? '' : 'disabled'} aria-label="${k}"></td>`).join('')}
       <td class="pla-notes">${esc(g.notes || '')}</td></tr>`; }).join('')}</tbody></table></div>`;
@@ -651,7 +657,7 @@ function plaLlista() {
         <span class="pla-cap"><b>${g.numero}</b>${musical ? ' · ' + TIPUS_PLA[g.tipusEp] : ''}${g.emissio ? ' · ' + dataCurta(g.emissio) : ''} ${etiqueta(g)}</span>
         <span class="pla-l">${a}</span>${b ? `<span class="pla-l">${b}</span>` : ''}
         ${g.notes ? `<span class="pla-l pla-notes">${esc(g.notes)}</span>` : ''}
-      </button>
+      </button>${invPla(g) ? `<div class="pla-inv-c">${invPla(g)}</div>` : ''}
       <div class="pla-checks">${checksPla(g)}</div></div>`; }).join('')}</div>`;
   $('#plaLlista').innerHTML = rows.length ? taula + targetes : '<p class="empty">Cap episodi amb aquests filtres.</p>';
 }
@@ -2409,6 +2415,9 @@ $('#main').addEventListener('click', (e) => {
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'nou-potencial': return openPersona(null, 'convidat', { potencial: true, estatPot: 'idea' });
     case 'si-potencial': return siPotencial(id);
+    case 'invita-ep': { const g = state.gravacions.find((q) => q.id === id); if (!g) return;
+      const x = state.persones.find((q) => (g.convidatsIds || []).includes(q.id)), nom = x?.nom || g.titol, ag = contacteAgenda(nom);
+      return openInvitacio({ nom, tel: x?.telefon || ag?.tels?.[0] || '', email: x?.email || ag?.emails?.[0] || '', p: x || null, ep: g }); }
     case 'invita-potencial': { const x = state.persones.find((q) => q.id === id); if (!x) return; const ag = contacteAgenda(x.nom);
       return openInvitacio({ nom: x.nom, tel: x.telefon || ag?.tels?.[0] || '', email: x.email || ag?.emails?.[0] || '', p: x }); }
     case 'edita-persona': return openPersona(pers(id));
@@ -2658,6 +2667,7 @@ function contacteAgenda(nom) {
 function marcaInvitat(dest) {
   let p = dest.p || convidatPerNom().get(clauCerca(dest.nom));
   if (!p) { p = { id: uid(), nom: dest.nom, tipus: 'convidat', telefon: dest.tel || '', email: dest.email || '', notes: '', potencial: true }; state.persones.push(p); }
+  if (dest.ep && !(dest.ep.convidatsIds || []).includes(p.id)) dest.ep.convidatsIds = [...(dest.ep.convidatsIds || []), p.id];
   p.invitat = ymd(new Date());
   if (!p.telefon && dest.tel) p.telefon = dest.tel;
   if (!p.email && dest.email) p.email = dest.email;
