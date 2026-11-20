@@ -103,7 +103,7 @@ const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format 
 const esDavid = () => { try { return localStorage.getItem('podcasts-perfil') === 'david'; } catch (e) { return false; } };
 const bnId = () => state.programes.find((p) => /blanc/i.test(p.nom))?.id || '';
 const NUMERATS = ['dialeg', 'pindola', 'tematic'];
-const NOMES_ANGEL = new Set(['nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
+const NOMES_ANGEL = new Set(['nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
 // Quants artistes de cada costat té cada tipus d'episodi musical
 const SESSIO = 'Sessió de gravació';
 const TIPUS_EP = { sessio: ['Sessió de gravació (sense episodi concret)', 0], dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
@@ -609,8 +609,9 @@ function renderPlanificacio(m) {
     <div class="legend pla-llegenda">${musical ? ['dialeg', 'pindola', 'tematic'].map((k) => `<span><span class="caixa t-${k}"></span>${TIPUS_PLA[k]}</span>`).join('') : ''}
       <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
       <span class="hint">${esc(p.nom)} · ${eps.length} ${musical ? 'episodis' : 'programes'}</span></div>
-    ${blocRefer(p.id)}${blocAvisos(p.id)}${musical ? blocPropostes() : ''}
+    ${blocRefer(p.id)}${blocAvisos(p.id)}${musical ? blocPropostes() : blocPotencials(p.id)}
     <div id="plaLlista"></div>`;
+  $('#potencials')?.addEventListener('toggle', (e) => { ui.potObert = e.target.open; });
   plaLlista();
 }
 function plaLlista() {
@@ -643,6 +644,54 @@ function plaLlista() {
       <div class="pla-checks">${checksPla(g)}</div></div>`; }).join('')}</div>`;
   $('#plaLlista').innerHTML = rows.length ? taula + targetes : '<p class="empty">Cap episodi amb aquests filtres.</p>';
 }
+/* ---------- Convidats potencials (La cara oculta) ---------- */
+// Són els convidats de la fitxa de persones marcats com a potencials que encara no tenen programa a la planificació
+const ESTATS_POT = [['idea', '💡 Idea'], ['contactat', '📨 Contactat'], ['esperant', '⏳ Esperant resposta'], ['descartat', '✖ Descartat']];
+const enPlanificacio = (persId, pid) => state.gravacions.some((g) => g.programaId === pid && Number(g.numero) > 0 && g.estat !== 'cancellat' && (g.convidatsIds || []).includes(persId));
+function potencials(pid) {
+  const ordre = { esperant: 0, contactat: 1, idea: 2, descartat: 3 };
+  return state.persones.filter((x) => x.tipus === 'convidat' && x.potencial && !enPlanificacio(x.id, pid))
+    .sort((a, b) => (ordre[a.estatPot || 'idea'] - ordre[b.estatPot || 'idea']) || a.nom.localeCompare(b.nom, 'ca'));
+}
+function blocPotencials(pid) {
+  const tots = potencials(pid), actius = tots.filter((x) => x.estatPot !== 'descartat');
+  const llista = ui.potDescartats ? tots : actius;
+  const compte = ESTATS_POT.filter(([k]) => k !== 'descartat').map(([k, nom]) => [nom, actius.filter((x) => (x.estatPot || 'idea') === k).length]).filter(([, n]) => n);
+  return `<details class="pot nomes-angel" id="potencials" ${ui.potObert ? 'open' : ''}>
+    <summary><b>Convidats potencials · ${actius.length}</b><span class="hint">${compte.map(([nom, n]) => `${nom} ${n}`).join(' · ')}</span></summary>
+    <div class="pot-barra">
+      <button class="btn primary small" data-action="nou-potencial">+ Convidat potencial</button>
+      <label class="check"><input type="checkbox" data-pot-descartats ${ui.potDescartats ? 'checked' : ''}> Mostra els descartats (${tots.length - actius.length})</label>
+      <span class="hint">Quan un et digui que sí, prem «✓ Ha dit que sí» i entrarà al final de la planificació.</span>
+    </div>
+    ${llista.length ? `<div class="pot-llista">${llista.map((x) => `<div class="pot-f ${x.estatPot === 'descartat' ? 'descartat' : ''}">
+      <button class="pot-nom" data-action="edita-persona" data-id="${x.id}"><b>${esc(x.nom)}</b>${x.qui ? `<span>${esc(x.qui)}</span>` : ''}
+        ${x.notes ? `<span class="pot-notes">${esc(x.notes)}</span>` : ''}</button>
+      <span class="pot-cont">${x.telefon ? '📞' : ''}${x.email ? '✉️' : ''}</span>
+      <select data-pot="${x.id}" aria-label="Estat de ${esc(x.nom)}">${ESTATS_POT.map(([k, nom]) => `<option value="${k}" ${(x.estatPot || 'idea') === k ? 'selected' : ''}>${nom}</option>`).join('')}</select>
+      <button class="btn small pot-si" data-action="si-potencial" data-id="${x.id}">✓ Ha dit que sí</button>
+    </div>`).join('')}</div>` : '<p class="hint">Encara no hi ha cap convidat potencial. Afegeix-ne amb «+ Convidat potencial».</p>'}
+  </details>`;
+}
+// «Ha dit que sí»: entra al final de la planificació amb el número i el dia d'emissió següents, i Confirmat marcat
+function siPotencial(id) {
+  const x = pers(id), pid = ui.planProg;
+  if (!x || esMusical(pid)) return;
+  const eps = episodisPla(pid), ult = eps[eps.length - 1];
+  const numero = ult ? Number(ult.numero) + 1 : 1;
+  const emissio = ult?.emissio ? seguentEmissio(ult.emissio) : '';
+  if (!confirm(`${x.nom} entrarà a la planificació com a programa ${numero}${emissio ? `, amb emissió el ${dataCurta(emissio)}` : ''}, amb Confirmat marcat.\n\nContinuar?`)) return;
+  const g = { id: uid(), programaId: pid, numero, emissio, horaEmissio: ult?.horaEmissio || '', titol: x.nom, descripcio: x.qui || '',
+    convidatsIds: [x.id], convidats: x.nom, estat: 'confirmat', data: '', hora: '', durada: 60, estudi: '', enllac: '',
+    presentadors: [], tecnic: '', notes: '', checklist: {}, cancons: [],
+    pla: { confirmat: true, cancons: false, guio: false, gravat: false, editat: false, enviat: false, emes: false, noticia: false } };
+  state.gravacions.push(g);
+  x.potencial = false; x.estatPot = 'si';
+  save(); render();
+  setTimeout(() => vesPla(g.id), 60);
+  toast(`${x.nom}: programa ${numero}${emissio ? ' · ' + dataCurta(emissio) : ''}.`);
+}
+
 // Porta a la vista l'episodi (a la taula o a les targetes, segons la pantalla)
 function vesPla(id) {
   const el = document.getElementById((mobil.matches ? 'plac-' : 'pla-') + id);
@@ -668,7 +717,9 @@ function renumeracioEntrevista(pid) {
   const eps = episodisPla(pid);
   const ultEmes = eps.reduce((ix, g, i) => (fet(g, 'emes') ? i : ix), -1);
   const fixos = eps.slice(0, ultEmes + 1), resta = eps.slice(ultEmes + 1);
-  const sense = state.gravacions.filter((g) => g.programaId === pid && !(Number(g.numero) > 0) && g.estat !== 'cancellat' && (g.data || esGravat(g))).sort(ordena);
+  const jaHiSon = new Set(eps.flatMap((g) => g.convidatsIds || []));   // la cita de gravació d'un convidat que ja té programa no en crea un altre
+  const sense = state.gravacions.filter((g) => g.programaId === pid && !(Number(g.numero) > 0) && g.estat !== 'cancellat' && (g.data || esGravat(g))
+    && !(g.convidatsIds || []).some((c) => jaHiSon.has(c))).sort(ordena);
   const cancel = state.gravacions.filter((g) => g.programaId === pid && Number(g.numero) > 0 && g.estat === 'cancellat' && !fet(g, 'emes'));
   const ordre = [...resta, ...sense].map((g) => [g, {}]);
   numeraOrdre(ordre, fixos);
@@ -1356,17 +1407,18 @@ function llistaConvidats() {
   }).join('') || `<p class="empty">${q || f ? 'Cap convidat coincideix amb la cerca.' : 'Encara no hi ha cap convidat. Els pots crear aquí o directament des d\'una gravació.'}</p>`;
 }
 
-function openPersona(p, tipus) {
+function openPersona(p, tipus, extra = {}) {
   const nou = !p;
   p = p || (tipus === 'convidat'
-    ? { id: uid(), nom: '', tipus: 'convidat', telefon: '', email: '', notes: '' }
+    ? { id: uid(), nom: '', tipus: 'convidat', telefon: '', email: '', notes: '', qui: '', ...extra }
     : { id: uid(), nom: '', rol: '' });
   const esConv = p.tipus === 'convidat';
   const h = esConv && !nou ? historial(p) : [];
   openDialog(`
-    <h3>${nou ? (esConv ? 'Nou convidat' : 'Nova persona') : (esConv ? 'Fitxa del convidat' : 'Edita persona')}</h3>
+    <h3>${nou ? (esConv ? (p.potencial ? 'Convidat potencial' : 'Nou convidat') : 'Nova persona') : (esConv ? 'Fitxa del convidat' : 'Edita persona')}</h3>
     <label>Nom <input name="nom" value="${esc(p.nom)}" required></label>
     ${esConv ? `
+      <label>Qui és <input name="qui" value="${esc(p.qui || '')}" placeholder="Ex.: Pilot de rescat de l'hospital Trueta" autocomplete="off"></label>
       <div class="grp" style="width:auto">
         <button type="button" class="btn small" data-dlg="contacte">📇 Des dels contactes</button>
         <input type="file" id="fitxerVcf" accept=".vcf,text/vcard,text/x-vcard" hidden>
@@ -1384,6 +1436,7 @@ function openPersona(p, tipus) {
       </div>
       <label>Notes <textarea name="notes" rows="3" placeholder="Temes, com el vam conèixer, preferències…">${esc(p.notes)}</textarea></label>
       <label class="check"><input type="checkbox" name="potencial" ${p.potencial ? 'checked' : ''}> Convidat potencial (encara per confirmar)</label>
+      <label>Estat del potencial <select name="estatPot">${ESTATS_POT.map(([k, nom]) => `<option value="${k}" ${(p.estatPot || 'idea') === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
       ${nou ? '' : `<fieldset><legend>Historial (${h.length})</legend>
         ${h.length ? `<ul class="historial">${h.map((g) => `<li><button type="button" data-dlg="obre-grav" data-id="${g.id}">
           <span class="dot" style="--c:${color(g)}"></span><b>${dataCurta(g.data || g.emissio)}</b> · ${esc(progNom(g))} · ${esc(titolG(g))} <span class="badge ${g.estat}">${estatNom(g.estat)}</span></button></li>`).join('')}</ul>`
@@ -1393,7 +1446,8 @@ function openPersona(p, tipus) {
     onSave(f) {
       const nom = f.get('nom').trim();
       if (!nom) { toast('Cal posar un nom.'); return false; }
-      if (esConv) Object.assign(p, { nom, telefon: f.get('telefon').trim(), email: f.get('email').trim(), notes: f.get('notes').trim(), potencial: f.get('potencial') === 'on' });
+      if (esConv) Object.assign(p, { nom, qui: String(f.get('qui') || '').trim(), telefon: f.get('telefon').trim(), email: f.get('email').trim(), notes: f.get('notes').trim(),
+        potencial: f.get('potencial') === 'on', ...(f.get('potencial') === 'on' ? { estatPot: f.get('estatPot') || 'idea' } : {}) });
       else Object.assign(p, { nom, rol: f.get('rol').trim() });
       if (nou) state.persones.push(p);
       if (esConv) state.gravacions.forEach((g) => {   // manté al dia el text de convidats (per al calendari)
@@ -2294,6 +2348,8 @@ $('#main').addEventListener('click', (e) => {
     case 'avisos-vistos': return avisosVistos();
     case 'nova-persona': return openPersona(null);
     case 'nou-convidat': return openPersona(null, 'convidat');
+    case 'nou-potencial': return openPersona(null, 'convidat', { potencial: true, estatPot: 'idea' });
+    case 'si-potencial': return siPotencial(id);
     case 'edita-persona': return openPersona(pers(id));
     case 'escolta': return Reproductor.tria();
     case 'imprimeix': return imprimeixLlista(el.dataset.que);
@@ -2327,6 +2383,12 @@ $('#main').addEventListener('click', (e) => {
 
 $('#main').addEventListener('change', (e) => {
   const t = e.target;
+  if (t.dataset.pot) {
+    const x = pers(t.dataset.pot);
+    if (x) { x.estatPot = t.value; save(); const y = window.scrollY; render(); window.scrollTo(0, y); }
+    return;
+  }
+  if ('potDescartats' in t.dataset) { ui.potDescartats = t.checked; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
   if (t.dataset.pla) {
     const g = state.gravacions.find((x) => x.id === t.dataset.pla);
     if (g && !potMarcar(g, t.dataset.k)) { t.checked = !t.checked; toast(fet(g, 'emes') ? "Aquest episodi ja és emès: només el pot canviar l'Angel." : "Guió, Gravat, Enviat i Emès només els marca l'Angel."); return; }
