@@ -359,23 +359,18 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   .tabs button.active { background: none; color: var(--cream); opacity: 1; }
   .tabs button.active svg { stroke-width: 2.6; }
 
-  /* Botó flotant petit per apuntar un convidat potencial, just a sobre del + */
-  .top .btn.nou-pot {
-    position: fixed; right: calc(18px + 7px); bottom: calc(78px + 58px + 12px + var(--safe-b)); z-index: 31;
-    width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center;
-    background: var(--ink); border: 2px solid var(--cream); color: var(--cream); box-shadow: 0 4px 14px rgba(0,0,0,.35);
+  /* Botons 💡 (convidat potencial) i + (nova gravació) a la barra de dalt, al costat del núvol */
+  .top { gap: 10px; }
+  .top .btn.nou-pot, .top .btn.primary.nova {
+    width: 38px; height: 38px; padding: 0; border-radius: 50%; display: grid; place-items: center; flex: none;
+    background: var(--ink); border: 1.5px solid var(--cream); color: var(--cream); box-shadow: none;
   }
-  .nou-pot .txt { display: none; }
-  .nou-pot .plus { margin: 0; font-size: 22px; filter: saturate(1.6) drop-shadow(0 0 4px rgba(255, 200, 40, .55)); }
-  /* Botó flotant per crear */
-  .nova {
-    position: fixed; right: 18px; bottom: calc(78px + var(--safe-b)); z-index: 31;
-    width: 58px; height: 58px; padding: 0; border-radius: 50%;
-    display: grid; place-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.35);
-  }
-  .top .btn.primary.nova { background: var(--ink); border: 2px solid var(--cream); color: var(--cream); }
-  .nova .txt { display: none; }
-  .nova .plus { font-size: 30px; margin: 0; font-weight: 400; }
+  .top .btn.nou-pot { order: 1; }
+  .top .btn.primary.nova { order: 2; }
+  .top .sync-pill { order: 3; }
+  .nou-pot .txt, .nova .txt { display: none; }
+  .nou-pot .plus { margin: 0; font-size: 19px; filter: saturate(1.6) drop-shadow(0 0 4px rgba(255, 200, 40, .55)); }
+  .nova .plus { font-size: 24px; margin: 0; font-weight: 400; }
 
   main { padding: 16px 16px calc(150px + var(--safe-b)); }
   .toolbar h2 { font-size: 21px; flex-basis: 100%; order: -1; margin: 0; }
