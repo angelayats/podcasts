@@ -359,7 +359,14 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   .tabs button.active { background: none; color: var(--cream); opacity: 1; }
   .tabs button.active svg { stroke-width: 2.6; }
 
-  .top .btn.nou-pot { display: none; }   /* al mòbil, el botó és dins la llista de potencials */
+  /* Botó flotant petit per apuntar un convidat potencial, just a sobre del + */
+  .top .btn.nou-pot {
+    position: fixed; right: calc(18px + 7px); bottom: calc(78px + 58px + 12px + var(--safe-b)); z-index: 31;
+    width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center;
+    background: var(--cream); border: 2px solid var(--ink); color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.3);
+  }
+  .nou-pot .txt { display: none; }
+  .nou-pot .plus { margin: 0; font-size: 20px; }
   /* Botó flotant per crear */
   .nova {
     position: fixed; right: 18px; bottom: calc(78px + var(--safe-b)); z-index: 31;
@@ -495,6 +502,7 @@ body.amb-reproductor main { padding-bottom: 130px; }
 @media (max-width: 760px) {
   #miniPlayer { bottom: calc(74px + var(--safe-b, 0px)); }
   body.amb-reproductor .nova { bottom: calc(190px + var(--safe-b, 0px)); }
+  body.amb-reproductor .top .btn.nou-pot { bottom: calc(190px + 58px + 12px + var(--safe-b, 0px)); }
   body.amb-reproductor main { padding-bottom: 220px; }
 }
 
