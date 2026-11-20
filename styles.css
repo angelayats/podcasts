@@ -800,6 +800,8 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .pot-nom .pot-notes { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .pot-cont { font-size: 14px; }
 .pot-f select { font-size: 14px; }
+.pot-bots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pot-nom .pot-inv { color: var(--accent, var(--muted)); font-size: 12px; }
 @media (max-width: 760px) {
   .pot-f { grid-template-columns: 1fr auto; }
   .pot-f select { grid-column: 1; }

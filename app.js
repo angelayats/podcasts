@@ -113,7 +113,7 @@ const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format 
 const esDavid = () => { try { return localStorage.getItem('podcasts-perfil') === 'david'; } catch (e) { return false; } };
 const bnId = () => state.programes.find((p) => /blanc/i.test(p.nom))?.id || '';
 const NUMERATS = ['dialeg', 'pindola', 'tematic'];
-const NOMES_ANGEL = new Set(['correu-emissora', 'nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
+const NOMES_ANGEL = new Set(['invita-potencial', 'correu-emissora', 'nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
 // Quants artistes de cada costat té cada tipus d'episodi musical
 const SESSIO = 'Sessió de gravació';
 const TIPUS_EP = { sessio: ['Sessió de gravació (sense episodi concret)', 0], dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
@@ -721,10 +721,12 @@ function blocPotencials(pid) {
     </div>
     ${llista.length ? `<div class="pot-llista">${llista.map((x) => `<div class="pot-f ${x.estatPot === 'descartat' ? 'descartat' : ''}">
       <button class="pot-nom" data-action="edita-persona" data-id="${x.id}"><b>${esc(x.nom)}</b>${x.qui ? `<span>${esc(x.qui)}</span>` : ''}
+        ${x.invitat ? `<span class="pot-inv">📨 Invitació enviada el ${dataCurta(x.invitat)}</span>` : ''}
         ${x.notes ? `<span class="pot-notes">${esc(x.notes)}</span>` : ''}</button>
       <span class="pot-cont">${x.telefon ? '📞' : ''}${x.email ? '✉️' : ''}</span>
       <select data-pot="${x.id}" aria-label="Estat de ${esc(x.nom)}">${ESTATS_POT.map(([k, nom]) => `<option value="${k}" ${(x.estatPot || 'idea') === k ? 'selected' : ''}>${nom}</option>`).join('')}</select>
-      <button class="btn small pot-si" data-action="si-potencial" data-id="${x.id}">✓ Ha dit que sí</button>
+      <span class="pot-bots"><button class="btn small" data-action="invita-potencial" data-id="${x.id}" title="Envia la invitació oficial">📨 Invitació</button>
+      <button class="btn small pot-si" data-action="si-potencial" data-id="${x.id}">✓ Ha dit que sí</button></span>
     </div>`).join('')}</div>` : '<p class="hint">Encara no hi ha cap convidat potencial. Afegeix-ne amb «+ Convidat potencial».</p>'}
   </details>`;
 }
@@ -2407,6 +2409,8 @@ $('#main').addEventListener('click', (e) => {
     case 'nou-convidat': return openPersona(null, 'convidat');
     case 'nou-potencial': return openPersona(null, 'convidat', { potencial: true, estatPot: 'idea' });
     case 'si-potencial': return siPotencial(id);
+    case 'invita-potencial': { const x = state.persones.find((q) => q.id === id); if (!x) return; const ag = contacteAgenda(x.nom);
+      return openInvitacio({ nom: x.nom, tel: x.telefon || ag?.tels?.[0] || '', email: x.email || ag?.emails?.[0] || '', p: x }); }
     case 'edita-persona': return openPersona(pers(id));
     case 'escolta': return Reproductor.tria();
     case 'imprimeix': return imprimeixLlista(el.dataset.que);
@@ -2656,7 +2660,9 @@ function marcaInvitat(dest) {
   if (!p) { p = { id: uid(), nom: dest.nom, tipus: 'convidat', telefon: dest.tel || '', email: dest.email || '', notes: '', potencial: true }; state.persones.push(p); }
   p.invitat = ymd(new Date());
   if (!p.telefon && dest.tel) p.telefon = dest.tel;
-  save();
+  if (!p.email && dest.email) p.email = dest.email;
+  if (p.potencial && (!p.estatPot || p.estatPot === 'idea')) p.estatPot = 'contactat';
+  save(); render();
 }
 function openInvitacio(dest) {
   const nom1 = (dest.nom || '').split(' ')[0];
@@ -2670,10 +2676,11 @@ function openInvitacio(dest) {
     <span class="hint">Pots canviar el text abans d'enviar-lo. <a href="#" data-dlg="inv-veure">📄 Mira la invitació</a></span>
     <div class="grp" style="width:auto">
       <button type="button" class="btn primary" data-dlg="inv-wa">💬 WhatsApp amb l'enllaç</button>
+      <button type="button" class="btn" data-dlg="inv-mail">✉️ Correu${dest.email ? '' : ' (sense adreça)'}</button>
       <button type="button" class="btn" data-dlg="inv-pdf">📎 Comparteix amb el PDF</button>
       <button type="button" class="btn" data-dlg="inv-copia">📋 Copia el text</button>
     </div>
-    <span class="hint"><b>WhatsApp amb l'enllaç</b> (recomanat) obre directament el xat d'aquesta persona, amb el missatge i l'enllaç a la invitació. <b>Comparteix amb el PDF</b> adjunta el fitxer; si WhatsApp no el deixa enviar, tria <b>Desa a Arxius</b> i adjunta'l des del xat amb <b>+ → Document</b>.</span>
+    <span class="hint"><b>WhatsApp amb l'enllaç</b> (recomanat) obre directament el xat d'aquesta persona, amb el missatge i l'enllaç a la invitació. <b>Correu</b> obre un correu nou amb el text i l'enllaç a la invitació${dest.email ? ' (a ' + esc(dest.email) + ')' : ''}. <b>Comparteix amb el PDF</b> adjunta el fitxer (al mòbil, tria Mail o WhatsApp); si WhatsApp no el deixa enviar, tria <b>Desa a Arxius</b> i adjunta'l des del xat amb <b>+ → Document</b>.</span>
     <button type="button" class="btn small" data-dlg="inv-model" style="align-self:flex-start">Desa aquest text com a model</button>`, {
     onSave() {},
     onExtra(a) {
@@ -2683,6 +2690,19 @@ function openInvitacio(dest) {
         if (!enllac) return toast('Cal un telèfon mòbil vàlid per enviar-ho per WhatsApp.');
         window.open(enllac, '_blank', 'noopener');
         marcaInvitat(dest); toast('Invitació preparada a WhatsApp.');
+      }
+      if (a === 'inv-mail') {
+        const assumpte = 'Invitació · La cara oculta de la lluna';
+        const cos = `${text}
+
+📄 Invitació: ${urlPdf}
+
+Àngel Ayats
+La cara oculta de la lluna · Girona FM`;
+        const mobil = matchMedia('(max-width: 760px), (pointer: coarse)').matches;
+        if (mobil) location.href = `mailto:${encodeURIComponent(dest.email || '')}?subject=${encodeURIComponent(assumpte)}&body=${encodeURIComponent(cos)}`;
+        else window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(dest.email || '')}&su=${encodeURIComponent(assumpte)}&body=${encodeURIComponent(cos)}`, '_blank', 'noopener');
+        marcaInvitat(dest); return toast('Correu preparat. Revisa-ho i prem Envia.');
       }
       if (a === 'inv-pdf') {
         if (!fitxerPdf) return toast('La invitació encara s\'està carregant. Torna-ho a provar en un moment.');
