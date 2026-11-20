@@ -2304,6 +2304,7 @@ $('#tabs').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-view]');
   if (b) { ui.view = b.dataset.view; render(); window.scrollTo(0, 0); }
 });
+$('#btnPotencial').addEventListener('click', () => openPersona(null, 'convidat', { potencial: true, estatPot: 'idea' }));
 $('#btnNova').addEventListener('click', () => {
   const avui = ymd(new Date());
   if (ui.view === 'calendari' && ui.mode === 'mes') return openGravacio(null, ui.diaSel >= avui ? ui.diaSel : avui);

@@ -157,6 +157,10 @@ a.btn.primary { color: var(--accent-text); }
 .btn.small { padding: 5px 12px; font-size: 13px; }
 .top .btn.primary { background: var(--cream); border-color: var(--cream); color: var(--ink); }
 .nova .plus { font-size: 18px; line-height: 1; margin-right: 4px; }
+/* Botó de la barra de dalt per afegir un convidat potencial (només ordinador i tauleta) */
+.top .btn.nou-pot { background: transparent; border: 1.5px solid var(--cream); color: var(--cream); white-space: nowrap; }
+.top .btn.nou-pot:hover { background: rgba(255,255,255,.1); }
+.nou-pot .plus { margin-right: 6px; }
 
 input, select, textarea {
   border: 1px solid var(--border); background: var(--surface);
@@ -329,6 +333,8 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   .tabs button { padding: 8px 12px; }
   .nova .txt { display: none; }
   .nova .plus { margin: 0; }
+  .nou-pot .txt { display: none; }
+  .nou-pot .plus { margin: 0; }
 }
 
 /* =========  Mòbil (iPhone)  ========= */
@@ -353,6 +359,7 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; font-weight: 600;
   .tabs button.active { background: none; color: var(--cream); opacity: 1; }
   .tabs button.active svg { stroke-width: 2.6; }
 
+  .top .btn.nou-pot { display: none; }   /* al mòbil, el botó és dins la llista de potencials */
   /* Botó flotant per crear */
   .nova {
     position: fixed; right: 18px; bottom: calc(78px + var(--safe-b)); z-index: 31;
@@ -520,7 +527,7 @@ body.amb-reproductor main { padding-bottom: 130px; }
 
 /* ---------- Portada fixa ---------- */
 body.a-portada #splash { z-index: 25; }
-body.a-portada .nova { display: none; }
+body.a-portada .nova, body.a-portada .top .btn.nou-pot { display: none; }
 body:not(.a-portada) #splash { pointer-events: none; }
 .brand { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 @media (min-width: 761px) { body.a-portada #splash { top: var(--alt-cap, 0px); } }
