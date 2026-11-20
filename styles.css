@@ -804,3 +804,10 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
   .pot-f { grid-template-columns: 1fr auto; }
   .pot-f select { grid-column: 1; }
 }
+
+/* Data d'enviament a l'emissora */
+.pla-marca.enviar.avui { background: #D9480F; animation: batec 1.6s ease-in-out infinite; }
+.pla-marca.enviar.tard { background: #C92A2A; }
+.pla-t-quan { text-transform: none; font-weight: 700; }
+.pla-t-quan.avui, .pla-t-quan.tard { background: #fff; color: #C92A2A; padding: 0 6px; border-radius: 999px; }
+@keyframes batec { 50% { transform: scale(1.08); } }

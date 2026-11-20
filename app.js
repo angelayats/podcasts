@@ -29,6 +29,16 @@ const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parseYmd = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+// Enviament a l'emissora: el divendres de la setmana abans de la d'emissió
+const diaEnviament = (em) => { if (!em) return ''; const d = parseYmd(em); return ymd(addDays(d, -((d.getDay() + 6) % 7) - 3)); };
+const dataBreu = (ds) => { const d = parseYmd(ds); return `${DIES[(d.getDay() + 6) % 7]} ${d.getDate()} ${MESOS[d.getMonth()].slice(0, 3)}.`; };
+function avisEnviament(g) {
+  const de = diaEnviament(g?.emissio); if (!de) return { txt: 'Enviar', cls: '' };
+  const avui = ymd(new Date());
+  if (de < avui) return { txt: `Enviar ja · era ${dataBreu(de)}`, cls: 'tard' };
+  if (de === avui) return { txt: 'Enviar avui', cls: 'avui' };
+  return { txt: `Enviar ${dataBreu(de)}`, cls: '' };
+}
 const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
 const toMin = (h) => { const [a, b] = (h || '00:00').split(':').map(Number); return a * 60 + (b || 0); };
 const fromMin = (m) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
@@ -605,7 +615,7 @@ function renderPlanificacio(m) {
       </div>
     </div>
     <div class="pla-tauler">${tauler.map(([k, nom, g]) => `<button class="pla-t pla-t-${k}" ${g ? `data-action="ves-pla" data-id="${g.id}"` : ''}>
-      <span class="pla-t-nom">${nom}</span>
+      <span class="pla-t-nom">${nom}${k === 'enviar' && g?.emissio ? ` · <span class="pla-t-quan ${avisEnviament(g).cls}">${esc(avisEnviament(g).txt.replace(/^Enviar ?/, '') || 'avui')}</span>` : ''}</span>
       <span class="pla-t-ep">${g ? `Ep. ${g.numero}${k === 'enviar' && g.emissio ? ' · ' + dataCurta(g.emissio) : ''} · ${esc(g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic' + (g.tema ? ' ' + g.tema : '') : g.titol)}` : 'Tot fet ✓'}</span></button>`).join('')}</div>
     <div class="legend pla-llegenda">${musical ? ['dialeg', 'pindola', 'tematic'].map((k) => `<span><span class="caixa t-${k}"></span>${TIPUS_PLA[k]}</span>`).join('') : ''}
       <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
@@ -623,7 +633,7 @@ function plaLlista() {
   const rows = filtraPla(eps, f)
     .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, g.descripcio, textMusica(g), textCanco(g.cancons).join(' '), g.notes].join(' ')).includes(w)));
   const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
-  const etiqueta = (g) => (g === env ? '<span class="pla-marca enviar">Enviar</span>' : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
+  const etiqueta = (g) => (g === env ? `<span class="pla-marca enviar ${avisEnviament(g).cls}">${esc(avisEnviament(g).txt)}</span>` : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
     + (g.referGuio ? '<span class="pla-marca refer">⚠ Refer guió</span>' : '')
     + (g.david && !esDavid() ? `<span class="pla-marca david ${g.david.vist ? 'vist' : ''}" title="Canviat per en David: ${esc(quanDavid(g))}">✎ David${g.david.vist ? ' · ' + esc(quanDavid(g)) : ''}</span>` : '');
   const taula = `<div class="panel pla-taula"><table>
@@ -664,7 +674,7 @@ function correuEmissora() {
   const pid = ui.planProg, eps = episodisPla(pid);
   const pendents = eps.filter((g) => !fet(g, kEnvia(pid)));
   if (!pendents.length) return toast('No hi ha cap programa pendent d\'enviar.');
-  const nomEp = (g) => `${g.numero} · ${g.emissio ? dataCurta(g.emissio) + ' · ' : ''}${g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic ' + (g.tema || '') : g.titol}`;
+  const nomEp = (g) => `${g.numero} · ${g.emissio ? `enviar ${dataBreu(diaEnviament(g.emissio))} · emissió ${dataBreu(g.emissio)} · ` : ''}${g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic ' + (g.tema || '') : g.titol}`;
   openDialog(`<h3>Correu a l'emissora</h3>
     <label>Programa <select name="ep">${pendents.slice(0, 12).map((g, i) => `<option value="${g.id}" ${i ? '' : 'selected'}>${esc(nomEp(g))}</option>`).join('')}</select></label>
     <label>Enllaç de WeTransfer <input name="enllac" type="url" placeholder="https://we.tl/…" autocomplete="off"></label>
