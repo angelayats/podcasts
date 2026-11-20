@@ -103,7 +103,7 @@ const esMusical = (pid) => { const p = prog(pid); return Boolean(p && (p.format 
 const esDavid = () => { try { return localStorage.getItem('podcasts-perfil') === 'david'; } catch (e) { return false; } };
 const bnId = () => state.programes.find((p) => /blanc/i.test(p.nom))?.id || '';
 const NUMERATS = ['dialeg', 'pindola', 'tematic'];
-const NOMES_ANGEL = new Set(['nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
+const NOMES_ANGEL = new Set(['correu-emissora', 'nou-potencial', 'si-potencial', 'nou-programa', 'edita-programa', 'nova-persona', 'nou-convidat', 'edita-persona', 'renumera', 'importa', 'esborra-tot', 'exemple', 'treu-estudi', 'importa-agenda', 'nou-contacte', 'contacte']);
 // Quants artistes de cada costat té cada tipus d'episodi musical
 const SESSIO = 'Sessió de gravació';
 const TIPUS_EP = { sessio: ['Sessió de gravació (sense episodi concret)', 0], dialeg: ['Diàleg (clàssic ↔ contemporani)', 1], pindola: ['Píndola resum (4 clàssics + 4 alternatius)', 4], tematic: ['Temàtic (5 clàssics + 5 alternatius)', 5] };
@@ -601,6 +601,7 @@ function renderPlanificacio(m) {
         <button class="btn nomes-angel" data-action="renumera">↻ Renumera</button>
         ${musical ? '<button class="btn primary nomes-david" data-action="proposta">+ Proposta</button>' : ''}
         <button class="btn" data-action="exporta-pla">⬇ Exporta</button>
+        <button class="btn nomes-angel" data-action="correu-emissora">✉️ Correu emissora</button>
       </div>
     </div>
     <div class="pla-tauler">${tauler.map(([k, nom, g]) => `<button class="pla-t pla-t-${k}" ${g ? `data-action="ves-pla" data-id="${g.id}"` : ''}>
@@ -644,6 +645,50 @@ function plaLlista() {
       <div class="pla-checks">${checksPla(g)}</div></div>`; }).join('')}</div>`;
   $('#plaLlista').innerHTML = rows.length ? taula + targetes : '<p class="empty">Cap episodi amb aquests filtres.</p>';
 }
+/* ---------- Correu a l'emissora ---------- */
+// Text per enganxar al correu de cada setmana, amb les dades del programa que toca enviar
+const majus = (t) => String(t || '').toLocaleUpperCase('ca');
+function textEmissora(g, enllac) {
+  const p = prog(g.programaId), musical = esMusical(g.programaId);
+  const art = (a) => [majus(a?.artista), a?.disc].filter(Boolean).join(' — ');
+  const noms = (ll) => (ll || []).map((a) => a?.artista).filter(Boolean).join(', ');
+  let cos;
+  if (!musical) cos = [`El convidat d'aquesta setmana és: ${majus(g.titol) || '(convidat)'}`];
+  else if (g.tipusEp === 'dialeg') cos = [`Episodi ${g.numero} · Diàleg`, `Clàssic: ${art(g.classics?.[0]) || '(per decidir)'}`, `Contemporani: ${art(g.contemporanis?.[0]) || '(per decidir)'}`];
+  else if (g.tipusEp === 'pindola') cos = [`Episodi ${g.numero} · ${g.titol || 'Píndola resum'}`, `Clàssics: ${noms(g.classics) || '(per decidir)'}`, `Alternatius: ${noms(g.contemporanis) || '(per decidir)'}`];
+  else cos = [`Episodi ${g.numero} · Temàtic${g.tema ? ': ' + g.tema : ''}`, `Clàssics: ${noms(g.classics) || '(per decidir)'}`, `Alternatius: ${noms(g.contemporanis) || '(per decidir)'}`];
+  return [`Bones, us adjunto en l'enllaç el programa de la setmana que ve de ${p?.nom || 'el podcast'}.`, '',
+    ...cos, '', enllac || '[enllaç de WeTransfer]', '', 'Moltes gràcies.', '', 'Àngel Ayats.'].join('\n');
+}
+function correuEmissora() {
+  const pid = ui.planProg, eps = episodisPla(pid);
+  const pendents = eps.filter((g) => !fet(g, kEnvia(pid)));
+  if (!pendents.length) return toast('No hi ha cap programa pendent d\'enviar.');
+  const nomEp = (g) => `${g.numero} · ${g.emissio ? dataCurta(g.emissio) + ' · ' : ''}${g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic ' + (g.tema || '') : g.titol}`;
+  openDialog(`<h3>Correu a l'emissora</h3>
+    <label>Programa <select name="ep">${pendents.slice(0, 12).map((g, i) => `<option value="${g.id}" ${i ? '' : 'selected'}>${esc(nomEp(g))}</option>`).join('')}</select></label>
+    <label>Enllaç de WeTransfer <input name="enllac" type="url" placeholder="https://we.tl/…" autocomplete="off"></label>
+    <label>Text del correu <textarea name="text" rows="12"></textarea></label>
+    <span class="hint">Pots retocar el text abans de copiar-lo. Després enganxa'l al correu i adjunta-hi les fotos.</span>`, {
+    onSave: () => false,
+    extraButtons: '<button type="button" class="btn" data-dlg="enviat">✓ Marca com a enviat</button><button type="button" class="btn primary" data-dlg="copia">Copia el text</button>',
+    onExtra(a) {
+      const f = $('#dlgForm'), g = state.gravacions.find((x) => x.id === f.elements.ep.value);
+      if (a === 'copia') return toast(copiaAra(f.elements.text.value) ? 'Text copiat. Enganxa\'l al correu.' : 'No s\'ha pogut copiar: selecciona el text i copia\'l a mà.');
+      if (a === 'enviat' && g) {
+        g.pla = { ...(g.pla || {}), [kEnvia(pid)]: true };
+        save(); closeDialog(); render(); toast(`Programa ${g.numero} marcat com a enviat.`);
+      }
+    },
+  });
+  $('#dlgForm button[type="submit"]').hidden = true;
+  const f = $('#dlgForm');
+  const omple = () => { const g = state.gravacions.find((x) => x.id === f.elements.ep.value); if (g) f.elements.text.value = textEmissora(g, f.elements.enllac.value.trim()); };
+  f.elements.ep.addEventListener('change', omple);
+  f.elements.enllac.addEventListener('input', omple);
+  omple();
+}
+
 /* ---------- Convidats potencials (La cara oculta) ---------- */
 // Són els convidats de la fitxa de persones marcats com a potencials que encara no tenen programa a la planificació
 const ESTATS_POT = [['idea', '💡 Idea'], ['contactat', '📨 Contactat'], ['esperant', '⏳ Esperant resposta'], ['descartat', '✖ Descartat']];
@@ -2343,6 +2388,7 @@ $('#main').addEventListener('click', (e) => {
     case 'ves-pla': return vesPla(id);
     case 'renumera': return renumera();
     case 'exporta-pla': return triaExportacio();
+    case 'correu-emissora': return correuEmissora();
     case 'proposta': return openProposta(state.propostes.find((x) => x.id === id) || null);
     case 'accepta-proposta': return acceptaProposta(id);
     case 'descarta-proposta': return descartaProposta(id);
