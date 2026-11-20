@@ -804,7 +804,9 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .pot-nom .pot-inv { color: var(--accent, var(--muted)); font-size: 12px; }
 @media (max-width: 760px) {
   .pot-f { grid-template-columns: 1fr auto; }
-  .pot-f select { grid-column: 1; }
+  .pot-f select { grid-column: 1 / -1; }
+  .pot-f .pot-bots { grid-column: 1 / -1; justify-content: stretch; }
+  .pot-f .pot-bots .btn { flex: 1; }
 }
 
 /* Data d'enviament a l'emissora */
