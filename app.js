@@ -743,6 +743,14 @@ function siPotencial(id) {
   const eps = episodisPla(pid), ult = eps[eps.length - 1];
   const numero = ult ? Number(ult.numero) + 1 : 1;
   const emissio = ult?.emissio ? seguentEmissio(ult.emissio) : '';
+  const jaHi = eps.find((g) => clauCerca(g.titol) === clauCerca(x.nom) || (g.convidatsIds || []).some((i) => clauCerca(pers(i)?.nom) === clauCerca(x.nom)));
+  if (jaHi) {
+    if (!confirm(`Compte: ${x.nom} ja és a la planificació, al programa ${jaHi.numero}${jaHi.emissio ? ` (${dataCurta(jaHi.emissio)})` : ''}.
+
+Si és la mateixa persona, prem Cancel·la: no cal tornar-lo a afegir.
+
+Vols afegir-lo igualment com a programa nou?`)) return;
+  } else
   if (!confirm(`${x.nom} entrarà a la planificació com a programa ${numero}${emissio ? `, amb emissió el ${dataCurta(emissio)}` : ''}, amb Confirmat marcat.\n\nContinuar?`)) return;
   const g = { id: uid(), programaId: pid, numero, emissio, horaEmissio: ult?.horaEmissio || '', titol: x.nom, descripcio: x.qui || '',
     convidatsIds: [x.id], convidats: x.nom, estat: 'confirmat', data: '', hora: '', durada: 60, estudi: '', enllac: '',
@@ -1509,6 +1517,18 @@ function openPersona(p, tipus, extra = {}) {
     onSave(f) {
       const nom = f.get('nom').trim();
       if (!nom) { toast('Cal posar un nom.'); return false; }
+      if (esConv) {   // avisa si ja hi ha un altre convidat amb el mateix nom
+        const igual = state.persones.find((x) => x.id !== p.id && x.tipus === 'convidat' && clauCerca(x.nom) === clauCerca(nom));
+        if (igual) {
+          const ep = state.gravacions.find((g) => Number(g.numero) > 0 && (g.convidatsIds || []).includes(igual.id));
+          const on = ep ? `ja és al programa ${ep.numero} de ${progNom(ep)}` : igual.potencial ? 'ja és a la llista de convidats potencials' : 'ja té fitxa de convidat';
+          if (!confirm(`Ja tens un convidat que es diu ${igual.nom}: ${on}.
+
+Si és la mateixa persona, prem Cancel·la i fes servir la fitxa que ja tens.
+
+Vols crear-ne un altre igualment?`)) return false;
+        }
+      }
       if (esConv) Object.assign(p, { nom, qui: String(f.get('qui') || '').trim(), telefon: f.get('telefon').trim(), email: f.get('email').trim(), notes: f.get('notes').trim(),
         potencial: f.get('potencial') === 'on', ...(f.get('potencial') === 'on' ? { estatPot: f.get('estatPot') || 'idea' } : {}) });
       else Object.assign(p, { nom, rol: f.get('rol').trim() });
