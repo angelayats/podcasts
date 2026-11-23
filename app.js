@@ -605,7 +605,7 @@ function renderPlanificacio(m) {
     <div class="toolbar">
       <div class="grp"><button class="btn nav-btn" data-action="vista" data-v="programes" aria-label="Torna a Programes">‹</button><h2>Planificació</h2></div>
       <div class="grp">
-        <input type="search" id="cercaPla" placeholder="${musical ? 'Cerca artista, disc, tema…' : 'Cerca convidat, cançó…'}" value="${esc(ui.cercaPla || '')}">
+        <label class="cerca-pla" title="Cerca a tota la planificació"><span aria-hidden="true">🔍</span><input type="search" id="cercaPla" placeholder="${musical ? 'Artista, disc, cançó…' : 'Convidat, artista, cançó…'}" value="${esc(ui.cercaPla || '')}" aria-label="Cerca a la planificació"></label>
         <select data-filter="filtrePla" aria-label="Què es mostra">${filtres
           .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button class="btn nomes-angel" data-action="renumera">↻ Renumera</button>
@@ -621,6 +621,7 @@ function renderPlanificacio(m) {
       <span><span class="caixa marca-enviar"></span>Per enviar</span><span><span class="caixa marca-gravar"></span>Per gravar</span>
       <span class="hint">${esc(p.nom)} · ${eps.length} ${musical ? 'episodis' : 'programes'}</span></div>
     ${blocRefer(p.id)}${blocAvisos(p.id)}${musical ? blocPropostes() : blocPotencials(p.id)}
+    <div id="plaCerca" class="pla-cerca-res" hidden></div>
     <div id="plaLlista"></div>`;
   $('#potencials')?.addEventListener('toggle', (e) => { ui.potObert = e.target.open; });
   plaLlista();
@@ -630,8 +631,10 @@ function plaLlista() {
   const eps = episodisPla(pid);
   const env = eps.find((g) => !fet(g, kEnvia(pid))), grav = eps.find((g) => !fet(g, 'gravat'));
   const q = clauCerca(ui.cercaPla || ''), f = ui.filtrePla || 'tots';
-  const rows = filtraPla(eps, f)
-    .filter((g) => !q || q.split(' ').every((w) => clauCerca([g.titol, g.tema, g.descripcio, textMusica(g), textCanco(g.cancons).join(' '), g.notes].join(' ')).includes(w)));
+  const textEp = (g) => clauCerca([g.titol, g.tema, g.descripcio, textMusica(g), textCanco([...(g.classics || []), ...(g.contemporanis || [])]).join(' '), textCanco(g.cancons).join(' '), g.notes].join(' '));
+  const coincideix = (g) => !q || q.split(' ').every((w) => textEp(g).includes(w));
+  const rows = filtraPla(eps, f).filter(coincideix);
+  resultatCerca(eps.filter(coincideix), rows, q, musical);
   const marca = (g) => (g === env ? 'enviar' : g === grav ? 'gravar' : '');
   const etiqueta = (g) => (g === env ? `<span class="pla-marca enviar ${avisEnviament(g).cls}">${esc(avisEnviament(g).txt)}</span>` : g === grav ? '<span class="pla-marca gravar">Gravar</span>' : '')
     + (g.referGuio ? '<span class="pla-marca refer">⚠ Refer guió</span>' : '')
@@ -660,6 +663,26 @@ function plaLlista() {
       </button>${invPla(g) ? `<div class="pla-inv-c">${invPla(g)}</div>` : ''}
       <div class="pla-checks">${checksPla(g)}</div></div>`; }).join('')}</div>`;
   $('#plaLlista').innerHTML = rows.length ? taula + targetes : '<p class="empty">Cap episodi amb aquests filtres.</p>';
+}
+// Resposta clara a «el tenim a la planificació?»: on surt (a tota la llista, encara que el filtre n'amagui)
+function resultatCerca(tots, visibles, q, musical) {
+  const el = $('#plaCerca');
+  if (!el) return;
+  el.hidden = !q;
+  if (!q) { el.innerHTML = ''; return; }
+  const paraula = esc(ui.cercaPla.trim());
+  if (!tots.length) { el.className = 'pla-cerca-res no'; el.innerHTML = `✗ «${paraula}» no surt a cap ${musical ? 'episodi' : 'programa'} de la planificació.`; return; }
+  const on = (g) => {
+    if (!musical) return '';
+    const w = q.split(' '), te = (a) => a && w.every((x) => clauCerca([a.artista, a.disc, a.canco].join(' ')).includes(x));
+    return (g.classics || []).some(te) ? ' · clàssic' : (g.contemporanis || []).some(te) ? ' · alternatiu' : '';
+  };
+  const nom = (g) => (g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic ' + (g.tema || '') : g.titol) || '';
+  const amagats = tots.length - visibles.length;
+  el.className = 'pla-cerca-res si';
+  el.innerHTML = `✓ «${paraula}» surt a ${tots.length === 1 ? '1 ' + (musical ? 'episodi' : 'programa') : tots.length + (musical ? ' episodis' : ' programes')}:
+    ${tots.map((g) => `<button class="pla-cerca-ep" data-action="ves-pla" data-id="${g.id}"><b>${g.numero}</b>${g.emissio ? ' · ' + dataCurta(g.emissio) : ''} · ${esc(nom(g))}${on(g)}${fet(g, 'emes') ? ' · <i>emès</i>' : ''}</button>`).join('')}
+    ${amagats ? `<span class="hint">${amagats} no es veu${amagats > 1 ? 'en' : ''} a la llista pel filtre triat. Posa «Tots els episodis» per veure'ls.</span>` : ''}`;
 }
 /* ---------- Correu a l'emissora ---------- */
 // Text per enganxar al correu de cada setmana, amb les dades del programa que toca enviar

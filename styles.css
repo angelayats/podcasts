@@ -800,6 +800,17 @@ body:not(.perfil-david) .nomes-david { display: none !important; }
 .pot-nom .pot-notes { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .pot-cont { font-size: 14px; }
 .pot-f select { font-size: 14px; }
+/* Cerca de la planificació */
+.cerca-pla { position: relative; display: inline-flex; align-items: center; }
+.cerca-pla > span { position: absolute; left: 10px; font-size: 14px; pointer-events: none; }
+.cerca-pla input { padding-left: 32px; min-width: 210px; }
+.pla-cerca-res { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; font-size: 14px; border: 1px solid var(--border); background: var(--surface); }
+.pla-cerca-res.si { border-color: #7FCF8E; background: color-mix(in srgb, #7FCF8E 14%, var(--surface)); }
+.pla-cerca-res.no { border-color: #E9A08F; background: color-mix(in srgb, #E9A08F 14%, var(--surface)); }
+.pla-cerca-ep { border: 1px solid var(--border); background: var(--surface); color: inherit; font: inherit; font-size: 13px; border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+.pla-cerca-ep:hover { border-color: currentColor; }
+.pla-cerca-res .hint { flex-basis: 100%; }
+@media (max-width: 760px) { .cerca-pla, .cerca-pla input { width: 100%; min-width: 0; } }
 .pla-inv { display: block; margin-top: 6px; font-size: 12.5px; padding: 3px 9px; }
 .pla-inv span { color: var(--muted); font-weight: 400; }
 .pla-inv-c { padding: 0 10px 6px; }
