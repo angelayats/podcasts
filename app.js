@@ -204,6 +204,9 @@ function render() {
   const david = esDavid();
   document.body.classList.toggle('perfil-david', david);
   if (david && ui.view === 'contactes') ui.view = 'calendari';
+  // La cerca de la Planificació es buida en sortir-ne o en canviar de programa
+  const llocCerca = ui.view === 'planificacio' ? 'pla:' + ui.planProg : ui.view;
+  if (ui.llocCerca !== llocCerca) { ui.cercaPla = ''; ui.llocCerca = llocCerca; }
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === (ui.view === 'planificacio' ? 'programes' : ui.view)));
   // Portada: la caràtula queda fixa, amb el menú a sota
   const portada = ui.view === 'portada';
@@ -605,7 +608,7 @@ function renderPlanificacio(m) {
     <div class="toolbar">
       <div class="grp"><button class="btn nav-btn" data-action="vista" data-v="programes" aria-label="Torna a Programes">‹</button><h2>Planificació</h2></div>
       <div class="grp">
-        <label class="cerca-pla" title="Cerca a tota la planificació"><span aria-hidden="true">🔍</span><input type="search" id="cercaPla" placeholder="${musical ? 'Artista, disc, cançó…' : 'Convidat, artista, cançó…'}" value="${esc(ui.cercaPla || '')}" aria-label="Cerca a la planificació"></label>
+        <label class="cerca-pla" title="Cerca a tota la planificació"><span aria-hidden="true">🔍</span><input type="search" id="cercaPla" placeholder="${musical ? 'Artista, disc, cançó…' : 'Convidat, artista, cançó…'}" value="${esc(ui.cercaPla || '')}" aria-label="Cerca a la planificació"><button type="button" class="cerca-buida" data-action="buida-cerca" aria-label="Esborra la cerca" ${ui.cercaPla ? '' : 'hidden'}>✕</button></label>
         <select data-filter="filtrePla" aria-label="Què es mostra">${filtres
           .map(([v, t]) => `<option value="${v}" ${(ui.filtrePla || 'tots') === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
         <button class="btn nomes-angel" data-action="renumera">↻ Renumera</button>
@@ -2447,6 +2450,7 @@ $('#main').addEventListener('click', (e) => {
     }
     case 'vista': ui.view = el.dataset.v; render(); window.scrollTo(0, 0); return;
     case 'ves-pla': return vesPla(id);
+    case 'buida-cerca': { ui.cercaPla = ''; const i = $('#cercaPla'); i.value = ''; el.hidden = true; plaLlista(); return i.focus(); }
     case 'renumera': return renumera();
     case 'exporta-pla': return triaExportacio();
     case 'correu-emissora': return correuEmissora();
@@ -2543,7 +2547,7 @@ $('#main').addEventListener('change', (e) => {
 });
 $('#main').addEventListener('input', (e) => {
   if (e.target.id === 'cerca') { ui.cerca = e.target.value; renderTaula(); }
-  if (e.target.id === 'cercaPla') { ui.cercaPla = e.target.value; plaLlista(); }
+  if (e.target.id === 'cercaPla') { ui.cercaPla = e.target.value; $('.cerca-buida').hidden = !ui.cercaPla; plaLlista(); }
   if (e.target.id === 'cercaCont') { ui.cercaCont = e.target.value; $('#llistaCont').innerHTML = llistaContactes(); }
   if (e.target.id === 'cercaStats') { ui.cercaStats = e.target.value; $('#statsLlista').innerHTML = llistaStats(); }
   if (e.target.id === 'cercaConv' || e.target.id === 'filtreConv') {
