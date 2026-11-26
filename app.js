@@ -1859,7 +1859,7 @@ function openGravacio(g, dataPerDefecte) {
     </fieldset>
     <fieldset class="nomes-musical musica"><legend>🎵 Contingut de l'episodi</legend>
       <label>Tipus d'episodi <select name="tipusEp">${Object.entries(TIPUS_EP).map(([k, [nom]]) => `<option value="${k}" ${(g.tipusEp || (g.numero || g.classics?.length ? 'dialeg' : 'sessio')) === k ? 'selected' : ''}>${nom}</option>`).join('')}</select></label>
-      <label class="nomes-tematic">Tema <input name="tema" value="${esc(g.tema || '')}" placeholder="Ex.: Guitarres"></label>
+      <label class="nomes-tematic">Nom del temàtic <input name="tema" value="${esc(g.tema || '')}" placeholder="Ex.: Guitarres" autocomplete="off"></label>
       <div class="musica-cols">${[['c', 'Clàssics', g.classics], ['k', 'Contemporanis / alternatius', g.contemporanis]].map(([pre, nom, llista]) => `
         <div><h4>${nom}</h4>${[0, 1, 2, 3, 4].map((i) => `<div class="art-fila" data-i="${i}">
           <input name="${pre}_art_${i}" value="${esc(llista?.[i]?.artista || '')}" placeholder="Artista" autocomplete="off">
@@ -1933,6 +1933,7 @@ function openGravacio(g, dataPerDefecte) {
         const m = llegeixMusica(f);
         Object.assign(dades, m);
         if (m.tipusEp === 'dialeg') dades.titol = titolDialeg(m) || dades.titol;
+        if (m.tipusEp === 'tematic') dades.titol = m.tema ? `Temàtic ${m.tema}` : 'Temàtic per decidir';
         // Temàtic: 10 cançons de 10 artistes diferents
         if (m.tipusEp === 'tematic') {
           const noms = [...m.classics, ...m.contemporanis].map((a) => clauCerca(a.artista));
@@ -2317,7 +2318,7 @@ function actualitzaFormat(f) {
   mostra('.nomes-pindola', musical && tipus === 'pindola');
   mostra('.nomes-canco', musical && (tipus === 'pindola' || tipus === 'tematic'));   // píndoles i temàtics: una cançó per artista
   mostra('.nomes-tematic', musical && tipus === 'tematic');
-  mostra('.no-dialeg', !musical || tipus !== 'dialeg');
+  mostra('.no-dialeg', !musical || (tipus !== 'dialeg' && tipus !== 'tematic'));   // diàlegs i temàtics: el títol es fa sol
   f.querySelectorAll('.art-fila').forEach((el) => { el.hidden = Number(el.dataset.i) >= n; });
   $('#lblTitol').textContent = !musical ? 'Convidat' : tipus === 'sessio' ? 'Títol' : 'Títol (p. ex. Píndola resum 7)';
   if (musical) f.elements.titol.removeAttribute('list'); else f.elements.titol.setAttribute('list', 'llistaConvAgenda');
