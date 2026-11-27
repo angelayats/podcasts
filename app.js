@@ -696,19 +696,21 @@ function textEmissora(g, enllac) {
   const noms = (ll) => (ll || []).map((a) => a?.artista).filter(Boolean).join(', ');
   let cos;
   if (!musical) cos = [`El convidat d'aquesta setmana és: ${majus(g.titol) || '(convidat)'}`];
-  else if (g.tipusEp === 'dialeg') cos = [`Episodi ${g.numero} · Diàleg`, `Clàssic: ${art(g.classics?.[0]) || '(per decidir)'}`, `Contemporani: ${art(g.contemporanis?.[0]) || '(per decidir)'}`];
+  else if (g.tipusEp === 'dialeg') cos = [`Episodi ${g.numero} · Diàleg`, `Clàssic: ${art(g.classics?.[0]) || '(per decidir)'}`, `Alternatiu: ${art(g.contemporanis?.[0]) || '(per decidir)'}`];
   else if (g.tipusEp === 'pindola') cos = [`Episodi ${g.numero} · ${g.titol || 'Píndola resum'}`, `Clàssics: ${noms(g.classics) || '(per decidir)'}`, `Alternatius: ${noms(g.contemporanis) || '(per decidir)'}`];
   else cos = [`Episodi ${g.numero} · Temàtic${g.tema ? ': ' + g.tema : ''}`, `Clàssics: ${noms(g.classics) || '(per decidir)'}`, `Alternatius: ${noms(g.contemporanis) || '(per decidir)'}`];
-  return [`Bones, us adjunto en l'enllaç el programa de la setmana que ve de ${p?.nom || 'el podcast'}.`, '',
+  return [`Hola, us adjunto en l'enllaç el programa de la setmana que ve de ${p?.nom || 'el podcast'}.`, '',
     ...cos, '', enllac || '[enllaç de WeTransfer]', '', 'Moltes gràcies.', '', 'Àngel Ayats.'].join('\n');
 }
-function correuEmissora() {
-  const pid = ui.planProg, eps = episodisPla(pid);
-  const pendents = eps.filter((g) => !fet(g, kEnvia(pid)));
+function correuEmissora(idTria) {
+  const tria = idTria && state.gravacions.find((x) => x.id === idTria);
+  const pid = tria ? tria.programaId : ui.planProg, eps = episodisPla(pid);
+  let pendents = eps.filter((g) => !fet(g, kEnvia(pid))).slice(0, 12);
+  if (tria && !pendents.includes(tria)) pendents = [tria, ...pendents];
   if (!pendents.length) return toast('No hi ha cap programa pendent d\'enviar.');
   const nomEp = (g) => `${g.numero} · ${g.emissio ? `enviar ${dataBreu(diaEnviament(g.emissio))} · emissió ${dataBreu(g.emissio)} · ` : ''}${g.tipusEp === 'dialeg' ? titolDialeg({ classics: g.classics || [], contemporanis: g.contemporanis || [] }) || g.titol : g.tipusEp === 'tematic' ? 'Temàtic ' + (g.tema || '') : g.titol}`;
   openDialog(`<h3>Correu a l'emissora</h3>
-    <label>Programa <select name="ep">${pendents.slice(0, 12).map((g, i) => `<option value="${g.id}" ${i ? '' : 'selected'}>${esc(nomEp(g))}</option>`).join('')}</select></label>
+    <label>Programa <select name="ep">${pendents.map((g, i) => `<option value="${g.id}" ${(tria ? g === tria : !i) ? 'selected' : ''}>${esc(nomEp(g))}</option>`).join('')}</select></label>
     <label>Enllaç de WeTransfer <input name="enllac" type="url" placeholder="https://we.tl/…" autocomplete="off"></label>
     <label>Text del correu <textarea name="text" rows="12"></textarea></label>
     <span class="hint">Pots retocar el text abans de copiar-lo. Després enganxa'l al correu i adjunta-hi les fotos.</span>`, {
@@ -1888,6 +1890,8 @@ function openGravacio(g, dataPerDefecte) {
       </div>
       <label>Notícia publicada <input type="url" name="enllac" value="${esc(g.enllac || '')}" placeholder="https://…"></label>
       ${g.enllac ? `<a class="hint" href="${esc(g.enllac)}" target="_blank" rel="noopener">📰 Obre la notícia</a>` : ''}
+      ${!nou && Number(g.numero) > 0 && g.programaId ? `<div class="chatgpt-fila nomes-angel"><button type="button" class="btn small" data-dlg="correu">✉️ Correu a l'emissora</button>
+        <span class="hint">Desa la fitxa i prepara el text per enganxar al correu, amb l'enllaç de WeTransfer.</span></div>` : ''}
     </fieldset>
     <label>Estudi <select name="estudi"><option value="">— Cap / fora d'estudi —</option>${estudis.map((s) => `<option ${s === g.estudi ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
     <fieldset><legend>Presenten / participen</legend>
@@ -2014,6 +2018,10 @@ function openGravacio(g, dataPerDefecte) {
     },
     onExtra(action) {
       if (action === 'chatgpt') return enviaChatGPT($('#dlgForm'), g);
+      if (action === 'correu') {
+        if (this.onSave(new FormData($('#dlgForm'))) === false) return;
+        save(); render(); return correuEmissora(g.id);
+      }
       if (action === 'omple-pindola') omplePindola($('#dlgForm'), g);
       if (action === 'copia') {
         const f = $('#dlgForm').elements;
